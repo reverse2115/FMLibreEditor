@@ -1,0 +1,74 @@
+/*
+ * Bob's theme. This file overrides the almanac look of App.css with the dark look from the approved mockup: one dark
+ * page in both light and dark system settings, panels a step lighter, a teal accent for the main action and what is
+ * picked, and 1–20 values that read at a glance: grey when low, white when average, outlined teal when good and filled
+ * teal when excellent. To change the accent, change --accent and the three values derived from it.
+ */
+:root:root {
+  --bg: #0f1218;
+  --panel: #171c26;
+  --raised: #232a38;
+  --hover: #2b3344;
+  --field: #0b0e13;
+  --zebra: transparent;
+  --border: #262c39;
+  --border-strong: #3a4254;
+  --text: #e8ebf1;
+  --muted: #b8c0cf;
+
+  --accent: #3dd9ae;
+  --accent-hover: #6be5c4;
+  --accent-soft: rgb(61 217 174 / 0.16);
+  --accent-faint: rgb(61 217 174 / 0.08);
+  --on-accent: #0e1116;
+  --strip: #151922;
+  --on-strip: #e8ebf1;
+  --accent-text: #ffffff;
+
+  --pending: #f2c766;
+  --pending-soft: #f2c766;
+  --on-pending: #0e1116;
+
+  --danger: #f0705f;
+  --danger-soft: rgb(240 112 95 / 0.14);
+  --ok: #3dd9ae;
+  --scrim: rgb(0 0 0 / 0.6);
+
+  --tier-1: #9aa3b5;
+  --tier-2: #e8ebf1;
+  --tier-3: #7fe6cb;
+  --tier-4: #3dd9ae;
+  --on-tier: #0e1116;
+
+  --mix-1: #d4765f;
+  --mix-2: #d6a24a;
+  --mix-3: #a3bd5c;
+  --mix-4: #5bb383;
+  --mix-5: #8d9aab;
+  --mix-6: #b87fa8;
+
+  --radius: 6px;
+  --scroll: #3a4254;
+
+  color-scheme: dark;
+}
+
+/* A 1–20 value sits in a small box so the good ones stand out as shapes, not only as colours. */
+:root .stat .value,
+:root .compare-grid .value {
+  min-width: 30px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+:root .stat .value.tier-3,
+:root .compare-grid .value.tier-3 {
+  box-shadow: inset 0 0 0 1px var(--tier-3);
+}
+
+:root .stat .value.tier-4,
+:root .compare-grid .value.tier-4 {
+  background: var(--tier-4);
+  color: var(--on-tier);
+}
