@@ -16,6 +16,7 @@ import { describeError } from "./format";
 import { InfoTip } from "./InfoTip";
 import { appText, fieldLabel, massEditText, profileText } from "./labels";
 import { undoFailureLines } from "./massDraft";
+import { PositionUpgradeDialog } from "./PositionUpgradeDialog";
 import type { PlayerDetails, StaffDetails } from "./types";
 import { EditorContext, useEditSession } from "./useProfileEditing";
 
@@ -52,6 +53,8 @@ export function AttributeActions({
   // Whether his attributes are frozen; null until the app has said.
   const [frozen, setFrozen] = useState<boolean | null>(null);
   const [freezeError, setFreezeError] = useState<string | null>(null);
+  // Whether the dialog of Upgrade for a position is up (players only).
+  const [upgrading, setUpgrading] = useState(false);
   const alive = useRef(true);
   const resultBox = useRef<HTMLDivElement>(null);
 
@@ -169,6 +172,21 @@ export function AttributeActions({
         >
           {profileText.maxAttributes}
         </button>
+        {!staff && (
+          <button
+            type="button"
+            className="max-toggle"
+            disabled={!editable}
+            title={
+              editable
+                ? "Raises the attributes that count for a position until he is at an ability you choose, after a preview."
+                : readOnlyNote
+            }
+            onClick={() => setUpgrading(true)}
+          >
+            Upgrade for a position
+          </button>
+        )}
         {frozen !== null && (
           <span className="freeze-line">
             <label className="freeze-toggle" title={editable ? freezeNote : readOnlyNote}>
@@ -212,6 +230,9 @@ export function AttributeActions({
           </>
         )}
       </div>
+      {upgrading && (
+        <PositionUpgradeDialog uid={uid} name={details.name} onEdited={onEdited} onClose={() => setUpgrading(false)} />
+      )}
       {frozen && <p className="note">{freezeNote}</p>}
       {freezeError && (
         <p className="note error" role="alert">

@@ -11,8 +11,10 @@ export function Ability({ value }: { value: number }) {
     );
   }
   const style = { "--fill": `${Math.min(100, value / 2)}%` } as CSSProperties;
+  // This fork colours an ability by how high it is, in four bands (see bob-theme.css).
+  const level = value >= 150 ? 4 : value >= 120 ? 3 : value >= 80 ? 2 : 1;
   return (
-    <span className="ability" style={style}>
+    <span className={`ability level-${level}`} style={style}>
       {value}
     </span>
   );
