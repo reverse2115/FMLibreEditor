@@ -8,7 +8,7 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Ability } from "./Ability";
 import { EditableValue } from "./EditControls";
-import { changeLog, nationalProfile, nationalStatus, nationalTeamAction, undoBatch } from "./editing";
+import { applyEdits, changeLog, nationalProfile, nationalStatus, nationalTeamAction, readValues, undoBatch } from "./editing";
 import { FilterBar } from "./FilterBar";
 import { describeError } from "./format";
 import {
@@ -193,6 +193,7 @@ function NationalProfileView({ team, version, onClose }: NationalProfileViewProp
             <p className="empty">{text.noTeams}</p>
           ) : (
             <>
+              <ManagerJob key={team.uid} uid={team.uid} version={version} />
               <NationalTeams
                 teams={teams}
                 shown={shown}
@@ -213,6 +214,103 @@ function NationalProfileView({ team, version, onClose }: NationalProfileViewProp
         </div>
       )}
     </ProfileFrame>
+  );
+}
+
+/**
+ * This fork: the senior team's manager's job. "Make the job vacant" empties the team's place for its manager, so that a
+ * human manager can apply for the job in the game; Undo in Changes puts him back. Only the place is emptied: the
+ * manager's contract with the nation, kept where the editor does not know, is left as it is, so what the game makes of
+ * it is still to be seen. Shown where the build places a team's manager.
+ */
+function ManagerJob({ uid, version }: { uid: number; version: number }) {
+  const { editable, readOnlyNote, onEdited } = useContext(EditorContext);
+  // Whether the job is held now; null until read, or where the build does not place a team's manager.
+  const [filled, setFilled] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; failed: boolean } | null>(null);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    readValues("nationalTeam", uid).then(
+      (values) => {
+        if (!cancelled) {
+          const manager = values["manager"];
+          setFilled(manager === undefined ? null : manager !== 0);
+        }
+      },
+      () => !cancelled && setFilled(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, version]);
+
+  if (filled === null) {
+    return null;
+  }
+
+  const vacate = async () => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    setResult(null);
+    try {
+      const report = await applyEdits("nationalTeam", uid, [{ field: "manager", value: 0 }]);
+      if (alive.current) {
+        setResult(
+          report.failed.length > 0
+            ? { text: describeError(report.failed[0].error), failed: true }
+            : { text: "The job is vacant. Undo is in the Changes view.", failed: false },
+        );
+      }
+      onEdited();
+    } catch (e) {
+      if (alive.current) {
+        setResult({ text: describeError(e), failed: true });
+      }
+    } finally {
+      if (alive.current) {
+        setBusy(false);
+      }
+    }
+  };
+
+  return (
+    <div className="manager-job">
+      <span className="manager-job-state">
+        Manager&apos;s job: <strong>{filled ? "filled" : "vacant"}</strong>
+      </span>
+      {filled && (
+        <button
+          type="button"
+          className="squad-action"
+          disabled={!editable}
+          aria-disabled={busy || undefined}
+          aria-busy={busy || undefined}
+          title={
+            editable
+              ? "Takes the manager out of the senior team, so that you can apply for the job in the game. Experimental."
+              : readOnlyNote
+          }
+          onClick={() => void vacate()}
+        >
+          Make the job vacant
+        </button>
+      )}
+      <span role="status" className={result?.failed ? "note error" : "note"}>
+        {result?.text}
+      </span>
+    </div>
   );
 }
 

@@ -329,6 +329,10 @@ pub fn fields(layout: &Layout, entity: Entity) -> Vec<Field> {
 
 /// What can be changed of a national team, where the layout places national teams: the reputation of its senior team,
 /// and that of each of its other teams by kind (`team.10.reputation` for the under-21s).
+///
+/// In this fork also the senior team's place for its manager (`manager`), where the layout places a team's manager:
+/// the editor only empties it (0), to make the job vacant, and an undo puts back the pointer it held. His contract,
+/// which a national team's manager keeps somewhere not yet known, is left as it is.
 fn national_team_fields(layout: &Layout) -> Vec<Field> {
     if layout.national.is_none() {
         return Vec::new();
@@ -336,7 +340,14 @@ fn national_team_fields(layout: &Layout) -> Vec<Field> {
     let reputation = layout.team.reputation;
     let senior =
         Field::new(Entity::NationalTeam, "reputation", reputation, Kind::U16, 0..=10_000).in_record(Place::SeniorTeam);
+    let manager = layout.team.manager.map(|offset| {
+        Field::new(Entity::NationalTeam, "manager", offset, Kind::Pointer, 0..=0)
+            .plausible(0..=*POINTERS.end())
+            .single()
+            .in_record(Place::SeniorTeam)
+    });
     std::iter::once(senior)
+        .chain(manager)
         .chain(crate::national::OTHER_KINDS.iter().map(|&kind| {
             Field::new(Entity::NationalTeam, format!("team.{kind}.reputation"), reputation, Kind::U16, 0..=10_000)
                 .in_record(Place::NationalTeamOfKind(kind))
@@ -995,15 +1006,18 @@ impl Session {
         if !field.is_plausible(old) {
             return Err(EditError::Implausible { field: field.key.clone(), value: old });
         }
+        // A pointer the editor may empty (this fork's national team manager) is put back from empty by an undo, and
+        // emptied without the class check below, which needs two objects.
+        let emptiable = field.kind == Kind::Pointer && field.takes(0);
         // A date the game has not set, or a pointer to nothing (a player without a city of birth), is left alone.
-        if matches!(field.kind, Kind::Date | Kind::Pointer) && old == 0 {
+        if matches!(field.kind, Kind::Date | Kind::Pointer) && old == 0 && !(restoring && emptiable) {
             return Err(EditError::Unset { field: field.key.clone() });
         }
         let change = Change { entity: target.entity, uid: target.uid, field: field.key.clone(), old, new: value };
         if old == value {
             return Ok(change);
         }
-        if field.kind == Kind::Pointer && !self.same_class(old, value)? {
+        if field.kind == Kind::Pointer && !(emptiable && (value == 0 || old == 0)) && !self.same_class(old, value)? {
             return Err(EditError::Unsupported { field: field.key.clone(), reason: OTHER_CLASS });
         }
         // A stadium seats no more than it holds. A seating above its capacity, or a capacity below its seating, would

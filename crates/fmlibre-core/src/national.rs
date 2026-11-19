@@ -390,7 +390,11 @@ mod tests {
         // Both layouts place national teams, the Mac's and the Windows one.
         let layout = crate::layout_for(27).expect("FM27 layout");
         assert!(layout.national.is_some());
-        let fields = crate::fields(&layout, crate::Entity::NationalTeam);
+        // This fork adds the senior team's manager (only ever emptied); the reputations are the rest.
+        let all = crate::fields(&layout, crate::Entity::NationalTeam);
+        let manager = all.iter().find(|field| field.key == "manager").expect("the manager's place");
+        assert!(manager.takes(0) && !manager.takes(1) && manager.is_plausible(0x7FF6_0000_0000));
+        let fields: Vec<_> = all.into_iter().filter(|field| field.key != "manager").collect();
         let keys: Vec<&str> = fields.iter().map(|field| field.key.as_str()).collect();
         assert_eq!(
             keys,
