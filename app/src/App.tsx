@@ -2,8 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { flushSync } from "react-dom";
 import { call, inTauri } from "./api";
 import { BridgeSetup } from "./BridgeSetup";
-import { ChangesView, useChangeLog } from "./ChangesView";
+import { ChangesView, useChangeFilter, useChangeLog } from "./ChangesView";
 import { ClubBrowser } from "./ClubBrowser";
+import { NationalBrowser } from "./NationalBrowser";
 import { CommandPalette, Keys, SearchIcon, type Command, type Found, type FoundKind } from "./CommandPalette";
 import { CompatibilityNotice } from "./CompatibilityNotice";
 import { CopyDiagnostics } from "./CopyDiagnostics";
@@ -16,12 +17,14 @@ import {
   appText,
   changesText,
   clubListText,
+  nationalText,
   homeText,
   paletteText,
   playerListText,
   scoutingText,
   staffListText,
   updateText,
+  whatsNewText,
 } from "./labels";
 import type { ListRequest } from "./ListBrowser";
 import { PlayerBrowser } from "./PlayerBrowser";
@@ -31,6 +34,7 @@ import { ScoutingBrowser } from "./ScoutingBrowser";
 import { MyClub } from "./MyClub";
 import { matches, SHORTCUTS, viewShortcut, withShortcut } from "./shortcuts";
 import { StaffBrowser } from "./StaffBrowser";
+import { readTeams, TeamsSwitch, type Teams } from "./TeamsSwitch";
 import type {
   BridgeInfo,
   ClubSummary,
@@ -46,10 +50,13 @@ import { UpdateCheck, UpdateNotice } from "./UpdateNotice";
 import { ComparisonContext, useComparison } from "./useComparison";
 import { modalOpen, topModal } from "./useModal";
 import { askToLeave, EditorContext, profileOnTop } from "./useProfileEditing";
+import { useWhatsNew } from "./whatsNew";
+import { WhatsNewDialog } from "./WhatsNewDialog";
 import "./App.css";
 
 type View = "home" | "players" | "staff" | "clubs" | "scouting" | "changes";
 
+// The national teams are listed in the Clubs tab, behind its switch (see `TeamsSwitch`), not in a tab of their own.
 const VIEWS: { id: View; label: string }[] = [
   { id: "home", label: homeText.nav },
   { id: "players", label: playerListText.nav },
@@ -121,14 +128,23 @@ function App() {
   const [refrozen, setRefrozen] = useState<Refrozen | null>(null);
   const [view, setView] = useState<View>(() => restored("view", readView));
   useSnapshot("view", () => view);
+  // Which teams the Clubs tab lists: the clubs, or the nations' national teams.
+  const [teams, setTeams] = useState<Teams>(() => restored("teams", readTeams));
+  useSnapshot("teams", () => teams);
   // Whether the view on show is one that was asked for: a tab, a shortcut, the palette, or the view the window was in
   // before the language was switched. Until then the app is where it opened, on My club, and goes to the players
   // instead when the save has no club for that page (see `MyClub`).
   const viewChosen = useRef(restored("view", (value) => value !== undefined));
   // The players picked for a comparison: in the player list's profiles and in those opened from a club's squad.
   const comparison = useComparison();
-  const { log, error: logError, reload: reloadLog, clear: clearLog } = useChangeLog();
+  const { log, error: logError, reload: reloadLog } = useChangeLog();
+  // The search and the filters of the Changes view stay when another view is shown, as a list's search does.
+  const [changeFilter, setChangeFilter] = useChangeFilter();
+  // The Changes tab counts what this connection wrote: the earlier changes of the history are not news.
+  const sessionChanges = log.filter((change) => !change.earlier).length;
   const update = useUpdateCheck();
+  // What this version brings: told once after an update, and again from the foot of the window or the palette.
+  const whatsNew = useWhatsNew(update.current);
   // Whether Check for updates was pressed: only then does the foot of the window say what was found.
   const [askedUpdate, setAskedUpdate] = useState(false);
   // Whether the game has loaded a save, or gone back to its main menu, since the data was read.
@@ -158,12 +174,12 @@ function App() {
   const connect = () =>
     run(appText.connecting, async () => {
       const { refrozen: again, ...connected } = await call<ConnectionInfo>("connect");
-      // A new connection has an empty change log, and its field tables may differ. Its lists start afresh, with no one
-      // picked for a comparison.
+      // A new connection lists the history of the career the game has loaded, and its field tables may differ. Its
+      // lists start afresh, with no one picked for a comparison.
       forgetFieldTables();
-      clearLog();
       comparison.clear();
       setConnection(connected);
+      void reloadLog();
       setRefrozen(again ?? null);
       setDataVersion((v) => v + 1);
     });
@@ -173,6 +189,8 @@ function App() {
       try {
         const { refrozen: again, ...reloaded } = await call<ReloadInfo>("reload");
         setConnection((c) => c && { ...c, ...reloaded });
+        // Reading the game again may have found another career, whose history replaces the list.
+        void reloadLog();
         if (again) {
           setRefrozen(again);
         }
@@ -257,10 +275,24 @@ function App() {
     }
   };
 
+  // The Clubs tab's switch between the clubs and the national teams: like another tab, it asks first while edits are
+  // pending in the open profile.
+  const showTeams = (next: Teams) => {
+    viewChosen.current = true;
+    if (next !== teams || view !== "clubs") {
+      askToLeave(() => {
+        setView("clubs");
+        setTeams(next);
+      });
+    }
+  };
+  const teamsSwitch = <TeamsSwitch teams={teams} onChange={showTeams} />;
+
   // A club's profile, opened from My club: the Clubs tab shows it.
   const openClub = (club: ClubSummary) => {
     viewChosen.current = true;
     setView("clubs");
+    setTeams("clubs");
     setRequest({ kind: "club", ask: { row: club } });
   };
 
@@ -290,6 +322,9 @@ function App() {
       askToLeave(() => {
         viewChosen.current = true;
         setView(VIEW_OF[found.kind]);
+        if (found.kind === "club") {
+          setTeams("clubs");
+        }
         setRequest(profileRequest(found));
       }),
     );
@@ -300,13 +335,17 @@ function App() {
       askToLeave(() => {
         viewChosen.current = true;
         setView(VIEW_OF[kind]);
+        if (kind === "club") {
+          setTeams("clubs");
+        }
         setRequest({ kind, ask: { query } });
       }),
     );
 
   const game = detection?.games[0];
   const idle = busy === null;
-  const searchable = connection !== null && (view === "players" || view === "staff" || view === "clubs");
+  const searchable =
+    connection !== null && (view === "players" || view === "staff" || view === "clubs" || view === "changes");
 
   // What the palette lists, read when it opens: the commands of the profile on show, then the lists, then the rest.
   const commands: Command[] = [];
@@ -331,6 +370,12 @@ function App() {
         run: () => show(id),
       }),
     );
+    // The national teams have no tab of their own: the Clubs tab lists them behind its switch.
+    commands.push({
+      id: "view-nationals",
+      label: paletteText.goTo(nationalText.nav),
+      run: () => showTeams("nationals"),
+    });
     if (searchable) {
       commands.push({ id: "find", label: paletteText.searchList, shortcut: SHORTCUTS.find, run: focusListSearch });
     }
@@ -344,6 +389,9 @@ function App() {
     }
     if (update.current) {
       commands.push({ id: "updates", label: updateText.check, run: checkUpdates });
+    }
+    if (whatsNew.available) {
+      commands.push({ id: "whats-new", label: whatsNewText.command, run: whatsNew.show });
     }
   }
 
@@ -424,7 +472,7 @@ function App() {
               onClick={() => show(id)}
             >
               {label}
-              {id === "changes" && log.length > 0 && <small>{log.length}</small>}
+              {id === "changes" && sessionChanges > 0 && <small>{sessionChanges}</small>}
             </button>
           ))}
         </nav>
@@ -515,11 +563,26 @@ function App() {
                 />
                 <ClubBrowser
                   version={dataVersion}
-                  active={view === "clubs"}
+                  active={view === "clubs" && teams === "clubs"}
                   request={request?.kind === "club" ? request.ask : null}
+                  scope={teamsSwitch}
+                />
+                <NationalBrowser
+                  version={dataVersion}
+                  active={view === "clubs" && teams === "nationals"}
+                  scope={teamsSwitch}
                 />
                 <ScoutingBrowser version={dataVersion} active={view === "scouting"} gameDate={connection.gameDate} />
-                {view === "changes" && <ChangesView log={log} error={logError} reload={reloadLog} onUndone={edited} />}
+                {view === "changes" && (
+                  <ChangesView
+                    log={log}
+                    error={logError}
+                    reload={reloadLog}
+                    onUndone={edited}
+                    filter={changeFilter}
+                    onFilter={setChangeFilter}
+                  />
+                )}
               </div>
             </ComparisonContext.Provider>
           </EditorContext.Provider>
@@ -541,6 +604,11 @@ function App() {
             FMLibreEditor{update.current && ` ${update.current}`} · {appText.stage}
           </span>
           {update.current && <UpdateCheck state={update.state} asked={askedUpdate} onCheck={checkUpdates} />}
+          {whatsNew.available && (
+            <button type="button" className="update-link whats-new-link" onClick={whatsNew.show}>
+              {whatsNewText.link}
+            </button>
+          )}
           {connection && <CopyDiagnostics className="update-link" />}
           <span className={`status ${connection ? "on" : ""}`}>
             <span className="dot" />
@@ -564,6 +632,10 @@ function App() {
           <GraphicsStatus />
         </div>
       </footer>
+
+      {whatsNew.shown && (
+        <WhatsNewDialog notes={whatsNew.shown} updated={whatsNew.updated} onClose={whatsNew.close} />
+      )}
 
       {paletteOpen && (
         <CommandPalette

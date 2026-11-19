@@ -17,8 +17,8 @@ use fmlibre_core::{
     GraphicsIndex, Kind, Loan, MANAGER, MoveTerms, NameKind, PERSONALITY, POSITIONS, PersonNames, Picture,
     PlayerFilter, PlayerIndex, PlayerOrder, PlayerSort, PrizeAmount, PrizeMoney, PrizeStage, ProfileNotes, Purpose,
     STAFF_ATTRIBUTE_GROUPS, SUPPORTER_MIX, SUPPORTER_TRAITS, Scale, ScanOptions, ScoutOrder, ScoutRequest, Session,
-    SessionError, StaffIndex, Target, Tie, TieTarget, date_line, diagnostics_report, find_game, job_name, nations,
-    profile_text, retirement_line, saves_loaded_line, scan_object_arrays, sort_players,
+    SessionError, SponsorshipReadError, StaffIndex, Target, Tie, TieTarget, date_line, diagnostics_report, find_game,
+    job_name, nations, profile_text, retirement_line, saves_loaded_line, scan_object_arrays, sort_players,
 };
 #[cfg(target_os = "macos")]
 use fmlibre_mem::MachImage;
@@ -114,6 +114,28 @@ enum Command {
         /// In the CSV file, semicolons between the values instead of commas, as Excel takes them in many languages.
         #[arg(long, requires = "export")]
         semicolon: bool,
+    },
+    /// List the nations' men's and women's national teams, highest reputation first, optionally only those matching TEXT
+    /// (a name, a code or a UID); with --squad, also the players the game lists for the first one's senior team. Only
+    /// reads memory.
+    NationalTeams {
+        /// Words to look for in the nations' names or codes (accents and case are ignored), or a UID.
+        text: Option<String>,
+        /// How many to print.
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+        /// Print the squad of the first match: its senior team's, or with --kind that of its team of that kind.
+        #[arg(long)]
+        squad: bool,
+        /// The kind of team --squad prints (0 is the senior team, 10 the under-21s).
+        #[arg(long, default_value_t = 0)]
+        kind: u8,
+        /// Print the teams of each one shown: kind, age limit, reputation and players.
+        #[arg(long)]
+        teams: bool,
+        /// Count the kinds of team of every container, with the age limits they have.
+        #[arg(long)]
+        kinds: bool,
     },
     /// List clubs, highest reputation first, optionally only those matching TEXT.
     Clubs {
@@ -287,6 +309,12 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         hold: u64,
     },
+    /// Show a club's sponsorship deals as the editor reads them from the game (#114). Only reads, on any build whose
+    /// layout places them.
+    Sponsorships {
+        /// The club's UID.
+        club: u32,
+    },
     /// Show the name of the stadium a club plays at and the names it can take in place; with NAME, rename it in the
     /// running game. Without a club, how many stadiums' names the editor can change, by the size of their blocks.
     StadiumName {
@@ -374,6 +402,19 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         hold: u64,
     },
+    /// Release members of staff from their clubs in the running game, one after another: each is left with no club and
+    /// no contract, as the game's own staff without a club are.
+    StaffRelease {
+        /// The members of staff's ids.
+        #[arg(required = true)]
+        ids: Vec<u32>,
+        /// Bring them back afterwards, the last one first, and check it: tests a release without changing the save.
+        #[arg(long)]
+        restore: bool,
+        /// With --restore, how many seconds to wait before bringing them back, to look at the game meanwhile.
+        #[arg(long, default_value_t = 0)]
+        hold: u64,
+    },
     /// Move a member of staff to another club in the running game, in the departments he works in.
     StaffMove {
         /// The member of staff's id.
@@ -387,6 +428,21 @@ enum Command {
         /// Move him back afterwards and check it: tests a move without changing the save.
         #[arg(long)]
         restore: bool,
+    },
+    /// Move a club's whole staff to another club in the running game, as the app's Move all staff does: the senior
+    /// team's manager first, then the rest, each in his own job and on his contract, worked out from the game as the one
+    /// before left it; one refused stays, and is said.
+    StaffMoveAll {
+        /// The UID of the club whose staff move.
+        club: u32,
+        /// The UID of the club they join.
+        to: u32,
+        /// Move them back afterwards, the last one first, and check it: tests the move without changing the save.
+        #[arg(long)]
+        restore: bool,
+        /// With --restore, how many seconds to wait before moving them back, to look at the game meanwhile.
+        #[arg(long, default_value_t = 0)]
+        hold: u64,
     },
     /// Give a member of staff another job at his club in the running game (a job code, see `staff`).
     StaffJob {
@@ -1089,6 +1145,7 @@ enum EntityArg {
     Player,
     Staff,
     Club,
+    NationalTeam,
 }
 
 impl From<EntityArg> for Entity {
@@ -1097,6 +1154,7 @@ impl From<EntityArg> for Entity {
             EntityArg::Player => Entity::Player,
             EntityArg::Staff => Entity::Staff,
             EntityArg::Club => Entity::Club,
+            EntityArg::NationalTeam => Entity::NationalTeam,
         }
     }
 }
@@ -1183,7 +1241,9 @@ fn run(cli: Cli) -> Result<()> {
                 | Command::Prizes { draw: Some(_), .. }
                 | Command::Prizes { loss: Some(_), .. }
                 | Command::Release { .. }
+                | Command::StaffRelease { .. }
                 | Command::StaffMove { .. }
+                | Command::StaffMoveAll { .. }
                 | Command::StaffJob { .. }
                 | Command::StaffSign { .. }
                 | Command::Swap { .. }
@@ -1256,6 +1316,15 @@ fn run(cli: Cli) -> Result<()> {
         Command::StaffRefs { ids, back, show } => {
             staff_refs(&connect(process, ArraySource::ProfileFirst)?, &ids, parse_hex(&back)?, show.as_deref())
         }
+        Command::NationalTeams { text, limit, squad, kind, teams, kinds } => {
+            let session = connect(process, ArraySource::ProfileFirst)?;
+            national_teams(
+                &session,
+                text.as_deref(),
+                limit,
+                NationalReport { squad: squad.then_some(kind), teams, kinds },
+            )
+        }
         Command::Clubs { text, limit, export, semicolon } => {
             let session = connect(process, ArraySource::ProfileFirst)?;
             let export = export.as_deref().map(|path| (path, export_format(path, semicolon)));
@@ -1298,6 +1367,7 @@ fn run(cli: Cli) -> Result<()> {
                 names.into_iter().filter_map(|(kind, name)| name.map(|name| (kind, name))).collect();
             rename(&connect(process, ArraySource::ProfileFirst)?, uid, staff, &wanted, restore)
         }
+        Command::Sponsorships { club } => sponsorships(&connect(process, ArraySource::ProfileFirst)?, club),
         Command::Prizes { text, settings, place, win, draw, loss, all, restore, hold } => {
             let mut amounts: Vec<(PrizeAmount, u32)> = place
                 .unwrap_or_default()
@@ -1317,8 +1387,14 @@ fn run(cli: Cli) -> Result<()> {
         Command::Release { uid, restore, hold } => {
             release_player(&connect(process, ArraySource::ProfileFirst)?, uid, restore, hold)
         }
+        Command::StaffRelease { ids, restore, hold } => {
+            staff_release(&connect(process, ArraySource::ProfileFirst)?, &ids, restore.then_some(hold))
+        }
         Command::StaffMove { id, club, job, restore } => {
             staff_change(&connect(process, ArraySource::ProfileFirst)?, id, StaffAction::Move(club, job), restore)
+        }
+        Command::StaffMoveAll { club, to, restore, hold } => {
+            staff_move_all(&connect(process, ArraySource::ProfileFirst)?, club, to, restore.then_some(hold))
         }
         Command::StaffSign { id, club, job, wage, expires, restore } => {
             let terms = MoveTerms { wage, expires: expires.map(FmDate::to_number) };
@@ -3492,6 +3568,15 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
 
     println!("Checks with what was found:");
     print_checks(&health);
+    // Not one of the checks: a finance record laid out otherwise leaves only the finances unread, which is easy to miss.
+    match session.finance_class() {
+        Some(_) => println!("Club finances: the class of the full finance record is found."),
+        None => println!(
+            "Club finances: no class of the full finance record is found, so no club's finances are read; where the \
+             game keeps finances for the clubs of the leagues being played, the record has moved (see `fields club \
+             --stats` and DEVELOPING.md)."
+        ),
+    }
 
     let edition = session.layout.edition;
     let game = &session.game;
@@ -3517,6 +3602,13 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         // Not looked for: kept from the built-in profile.
         tactics_manager: session.profile.as_ref().and_then(|profile| profile.tactics_manager),
         training_manager: session.profile.as_ref().and_then(|profile| profile.training_manager),
+        // Checked against the game's screens, not looked for: kept from the built-in profile.
+        prize_money: session.profile.as_ref().is_some_and(|profile| profile.prize_money),
+        sponsorships: session.profile.as_ref().is_some_and(|profile| profile.sponsorships),
+        national_teams: session.profile.as_ref().and_then(|profile| profile.national_teams),
+        // What the build lays out otherwise (the finances: `fields club --stats` says whether their class is found; a
+        // team's tactics: `training-history` finds the one in use), not looked for: kept from the built-in profile.
+        layout: session.profile.as_ref().map(|profile| profile.layout.clone()).unwrap_or_default(),
     };
 
     let failed = health.failed();
@@ -3556,11 +3648,16 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         ];
     }
     if let (Some(place), Some(game)) = (game_ui, &session.layout.game) {
-        let before = players.pair_rva.wrapping_sub(place.rva);
+        // Since the update of 17 November 2026 it sits after the players pair.
+        let from_players = if place.rva <= players.pair_rva {
+            format!("{:#X} before the players pair", players.pair_rva - place.rva)
+        } else {
+            format!("{:#X} after the players pair", place.rva - players.pair_rva)
+        };
         notes.game_ui = vec![
             format!("The static pointer to the game's own object ({}), whose count of saves loaded", game.class),
             format!(
-                "tells a load from a save: {before:#X} before the players pair{}.",
+                "tells a load from a save: {from_players}{}.",
                 session.loads().map_or_else(String::new, |loads| format!("; {loads} loaded when it was found"))
             ),
         ];
@@ -4665,6 +4762,12 @@ fn targets(session: &Session, entity: Entity) -> Result<Vec<(Target, String)>> {
         Entity::Player => session.players()?.into_iter().map(|p| (p.target(), p.name)).collect(),
         Entity::Staff => session.staff()?.into_iter().map(|s| (s.target(), s.name)).collect(),
         Entity::Club => session.clubs()?.into_iter().map(|c| (c.target(), c.name)).collect(),
+        Entity::NationalTeam => session
+            .national_teams()
+            .map_err(|reason| anyhow::anyhow!("no national teams to read on this build ({reason:?})"))?
+            .into_iter()
+            .map(|t| (t.target(), if t.women { format!("{} (women)", t.name) } else { t.name }))
+            .collect(),
     })
 }
 
@@ -5263,6 +5366,45 @@ fn print_prize_money(prize: &PrizeMoney, addresses: &[u64]) {
 }
 
 /// An amount with commas between thousands: 10,222,480.
+/// Prints the deals of a club as the app lists them, in pounds, with the game's date and whether the app shows them on
+/// this build.
+fn sponsorships(session: &Session, club: u32) -> Result<()> {
+    let clubs = ClubIndex::new(session.clubs()?);
+    let club = clubs.get(club).with_context(|| format!("no club with UID {club}"))?;
+    let deals = match session.sponsorships(club) {
+        Ok(deals) => deals,
+        Err(SponsorshipReadError::Memory(err)) => return Err(err.into()),
+        Err(SponsorshipReadError::Unavailable(why)) => bail!("{why}"),
+    };
+    let checked = session.profile.as_ref().is_some_and(|profile| profile.sponsorships);
+    println!(
+        "{} ({}): {} deal(s); game date {}; the app shows them on this build: {}",
+        club.name,
+        club.uid,
+        deals.len(),
+        session.game_date().map_or_else(|| "unknown".to_owned(), |date| date.to_number().to_string()),
+        if checked { "yes" } else { "no" }
+    );
+    let date = |date: Option<FmDate>| date.map_or_else(|| "-".to_owned(), |date| date.to_number().to_string());
+    for deal in &deals {
+        println!(
+            "  kind {:>2} {:<24} {} to {}  {}y  per season {:>11}  total {:>12}  {}{:>3}%  reputation {:>5}{}",
+            deal.kind,
+            deal.name.unwrap_or("(no name)"),
+            date(deal.start),
+            date(deal.end),
+            deal.years.map_or_else(|| "-".to_owned(), |years| years.to_string()),
+            deal.per_season,
+            deal.total,
+            if deal.rises { "+" } else { "-" },
+            deal.percent,
+            deal.reputation,
+            if deal.ended == Some(true) { "  ended" } else { "" }
+        );
+    }
+    Ok(())
+}
+
 fn pounds(amount: u32) -> String {
     let digits = amount.to_string();
     let mut text = String::with_capacity(digits.len() + digits.len() / 3);
@@ -5325,6 +5467,115 @@ fn release_player(session: &Session, uid: u32, restore: bool, hold: u64) -> Resu
         }
         session.undo_club_move(&done)?;
         ensure!(club_now("back at")? == Some(plan.from_club), "the player is not back at {from}");
+    }
+    Ok(())
+}
+
+/// Releases the members of staff `ids`, one after another, each planned from the game as the one before left it; one
+/// refused is said and passed over. With `restore_after`, waits that many seconds and brings them back, the last one
+/// first, as an undo of the batch does.
+fn staff_release(session: &Session, ids: &[u32], restore_after: Option<u64>) -> Result<()> {
+    let staff = StaffIndex::new(session.staff()?);
+    let clubs = ClubIndex::new(session.clubs()?);
+    let club = |uid: u32| clubs.get(uid).map_or("?", |c| c.name.as_str());
+    let job = |code: u8| job_name(code).map_or_else(|| format!("job {code}"), str::to_owned);
+    let mut done = Vec::new();
+    for &id in ids {
+        let member = staff.get(id).with_context(|| format!("no member of staff with id {id}"))?;
+        match session.plan_staff_release(member).and_then(|plan| session.apply_staff_plan(&plan)) {
+            Ok(change) => {
+                println!("{} (id {id}): {}, {}: released", member.name, club(change.from_club), job(change.job.0));
+                done.push(change);
+            }
+            Err(err) => println!("{} (id {id}): not released: {err}", member.name),
+        }
+    }
+    // Read them again as the lists would.
+    let now = |label: &str| -> Result<()> {
+        let read = session.staff()?;
+        for change in &done {
+            let member = read.iter().find(|s| s.uid == change.member).context("a member of staff is gone")?;
+            println!("  {label} {}: {}", member.name, member.club.as_deref().unwrap_or("no club"));
+        }
+        Ok(())
+    };
+    now("now")?;
+    if let Some(hold) = restore_after {
+        if hold > 0 {
+            println!("  bringing them back in {hold} s");
+            std::thread::sleep(std::time::Duration::from_secs(hold));
+        }
+        for change in done.iter().rev() {
+            session.undo_staff_change(change)?;
+        }
+        now("back")?;
+        let read = session.staff()?;
+        for change in &done {
+            let back = read.iter().find(|s| s.uid == change.member).and_then(|s| s.club_uid);
+            ensure!(back == Some(change.from_club), "member of staff {} is not back at his club", change.member);
+        }
+    }
+    Ok(())
+}
+
+/// Moves the whole staff of the club `from` to the club `to`, one after another in the order the app's Move all staff
+/// takes them (the senior team's manager first), each in his own job and planned from the game as the one before left
+/// it; one refused is said and stays. With `restore_after`, waits that many seconds and moves them back, the last one
+/// first, as an undo of the batch does.
+fn staff_move_all(session: &Session, from: u32, to: u32, restore_after: Option<u64>) -> Result<()> {
+    let all = session.staff()?;
+    let clubs = ClubIndex::new(session.clubs()?);
+    let club = |uid: u32| clubs.get(uid).with_context(|| format!("no club with UID {uid}"));
+    let (source, joining) = (club(from)?, club(to)?);
+    ensure!(from != to, "the staff are at {} already", source.name);
+    let job = |code: u8| job_name(code).map_or_else(|| format!("job {code}"), str::to_owned);
+    let mut ids: Vec<u32> = all.iter().filter(|s| s.club_uid == Some(from)).map(|s| s.uid).collect();
+    session.manager_first(source, &mut ids);
+    let staff = StaffIndex::new(all);
+    println!("{} staff of {} to {}", ids.len(), source.name, joining.name);
+    let mut done = Vec::new();
+    for id in ids {
+        let member = staff.get(id).with_context(|| format!("no member of staff with id {id}"))?;
+        match session.plan_staff_move(member, joining, None).and_then(|plan| session.apply_staff_plan(&plan)) {
+            Ok(change) => {
+                let grew = if change.grew { " (a department list grown)" } else { "" };
+                println!("{} (id {id}), {}: moved{grew}", member.name, job(change.job.0));
+                done.push(change);
+            }
+            Err(err) => println!("{} (id {id}): stays: {err}", member.name),
+        }
+    }
+    // Read them again as the lists would.
+    let count = |label: &str| -> Result<()> {
+        let read = session.staff()?;
+        let at = |uid: u32| read.iter().filter(|s| s.club_uid == Some(uid)).count();
+        let moved = done.iter().filter(|c| read.iter().any(|s| s.uid == c.member && s.club_uid == Some(to))).count();
+        println!(
+            "  {label}: {} staff at {}, {} at {}; {moved} of the {} moved at {}",
+            at(from),
+            source.name,
+            at(to),
+            joining.name,
+            done.len(),
+            joining.name
+        );
+        Ok(())
+    };
+    count("now")?;
+    if let Some(hold) = restore_after {
+        if hold > 0 {
+            println!("  moving them back in {hold} s");
+            std::thread::sleep(std::time::Duration::from_secs(hold));
+        }
+        for change in done.iter().rev() {
+            session.undo_staff_change(change)?;
+        }
+        count("back")?;
+        let read = session.staff()?;
+        for change in &done {
+            let back = read.iter().find(|s| s.uid == change.member).and_then(|s| s.club_uid);
+            ensure!(back == Some(from), "member of staff {} is not back at {}", change.member, source.name);
+        }
     }
     Ok(())
 }
@@ -6317,6 +6568,108 @@ fn clubs(session: &Session, text: Option<&str>, limit: usize, export: Option<(&P
     Ok(())
 }
 
+/// How many teams of one kind the containers hold: in all, the women's, and how many have each age limit.
+type KindCount = (usize, usize, BTreeMap<Option<u8>, usize>);
+
+/// What `national-teams` prints besides the list.
+struct NationalReport {
+    /// The squad of the first match's team of this kind.
+    squad: Option<u8>,
+    /// The teams of each one shown.
+    teams: bool,
+    /// The kinds of team of every container, counted.
+    kinds: bool,
+}
+
+fn national_teams(session: &Session, text: Option<&str>, limit: usize, report: NationalReport) -> Result<()> {
+    let started = Instant::now();
+    let teams = session
+        .national_teams()
+        .map_err(|reason| anyhow::anyhow!("this build has no national teams to read ({reason:?})"))?;
+    let elapsed = started.elapsed();
+    let index = fmlibre_core::NationalIndex::new(teams);
+    let hits = index.search(text.unwrap_or(""));
+    println!(
+        "Read {} national teams in {:.2} s; {} shown of {} matching.",
+        index.len(),
+        elapsed.as_secs_f64(),
+        hits.len().min(limit),
+        hits.len()
+    );
+    println!();
+    println!("{:>12}  {:<32}  {:<5}  {:>5}  {:>7}", "UID", "Nation", "Code", "Rep", "Players");
+    for team in hits.iter().take(limit) {
+        let name = if team.women { format!("{} (women)", team.name) } else { team.name.clone() };
+        println!(
+            "{:>12}  {:<32}  {:<5}  {:>5}  {:>7}",
+            team.uid,
+            clip(&name, 32),
+            team.code.as_deref().unwrap_or("-"),
+            team.reputation.map_or_else(String::new, |r| r.to_string()),
+            team.players
+        );
+        if report.teams {
+            for side in session.national_sides(team)? {
+                println!(
+                    "{:>12}  #{:<2} kind {:>2}  age limit {:>4}  rep {:>5}  players {:>3}",
+                    "",
+                    side.index,
+                    side.kind,
+                    side.age_limit.map_or_else(|| "none".to_owned(), |age| age.to_string()),
+                    side.reputation,
+                    side.players
+                );
+            }
+        }
+    }
+    if report.kinds {
+        // Kind -> (teams, women's teams, age limits with how many have each).
+        let mut kinds: BTreeMap<u8, KindCount> = BTreeMap::new();
+        for team in index.search("") {
+            for side in session.national_sides(team)? {
+                let entry = kinds.entry(side.kind).or_default();
+                entry.0 += 1;
+                entry.1 += usize::from(team.women);
+                *entry.2.entry(side.age_limit).or_default() += 1;
+            }
+        }
+        println!();
+        println!("Kinds of team in the containers:");
+        for (kind, (count, women, ages)) in kinds {
+            let ages: Vec<String> = ages
+                .into_iter()
+                .map(|(age, n)| format!("{}: {n}", age.map_or_else(|| "none".to_owned(), |age| format!("U{age}"))))
+                .collect();
+            println!("  kind {kind:>2}: {count:>3} teams ({women} women's); age limits {}", ages.join(", "));
+        }
+    }
+    if let Some(kind) = report.squad
+        && let Some(team) = hits.first()
+    {
+        let players = PlayerIndex::new(session.players()?);
+        let team_squad = session.national_squad(team, kind, &players)?;
+        println!();
+        println!(
+            "Team of kind {} of {}: {} players the game lists",
+            team_squad.kind,
+            team.name,
+            team_squad.players.len()
+        );
+        for member in &team_squad.players {
+            if let Some(player) = players.get(member.uid) {
+                println!(
+                    "  {:>10}  {:<30}  {:<12}  {}",
+                    player.uid,
+                    clip(&player.name, 30),
+                    player.positions.join(" "),
+                    player.club.as_deref().unwrap_or("-")
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn club(session: &Session, uid: u32) -> Result<()> {
     let index = ClubIndex::new(session.clubs()?);
     let summary = index.get(uid).with_context(|| format!("no club with UID {uid}"))?;
@@ -6326,6 +6679,14 @@ fn club(session: &Session, uid: u32) -> Result<()> {
     let teams = session.process.read_u64(summary.address + session.layout.club.teams).unwrap_or(0);
     println!("  addresses      object {:#x}, teams {teams:#x}", summary.address);
     println!("  short name     {}", c.short_name.as_deref().unwrap_or("-"));
+    let uid_of = |uid: Option<u32>| uid.map_or_else(String::new, |uid| format!(" ({uid})"));
+    println!("  nation         {}{}", c.nation.as_deref().unwrap_or("-"), uid_of(c.nation_uid));
+    println!(
+        "  league         {}{}{}",
+        c.league.as_deref().unwrap_or("-"),
+        uid_of(c.league_uid),
+        c.league_nation.as_deref().map_or_else(String::new, |nation| format!(", {nation}"))
+    );
     println!("  reputation     {}", c.reputation.map_or_else(|| "-".to_owned(), |r| r.to_string()));
     println!("  founded        {}", c.founded.map_or_else(|| "-".to_owned(), |y| y.to_string()));
     if session.layout.team.manager.is_some() {

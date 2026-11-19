@@ -70,10 +70,34 @@ pub struct Layout {
     /// The prize money a competition's stages pay (see `prize_money.rs`); only in the layouts it has been checked in.
     #[serde(default)]
     pub prize_money: Option<PrizeMoneyLayout>,
+    /// The sponsorship deals a club holds (see `sponsorship.rs`); only in the layouts they have been checked in.
+    #[serde(default)]
+    pub sponsorship: Option<SponsorshipLayout>,
     /// The game's tables of first, last and common names (see `names.rs`); only in the layouts they have been checked
     /// in.
     #[serde(default)]
     pub names: Option<NamesLayout>,
+    /// The nations' national teams (see `national.rs`); only in the layouts they have been checked in.
+    #[serde(default)]
+    pub national: Option<NationalLayout>,
+}
+
+/// How the game keeps a nation's national teams (see `national.rs`): each nation has two containers, one for its men's
+/// teams and one for its women's, whose teams are laid out as a club's ([`TeamLayout`]), with the container where a
+/// club's team points at its club.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NationalLayout {
+    /// In a container: its `u32` UID, the teams as `(begin, end, capacity)` of pointers with the senior team first, a
+    /// `u8` that is 1 for a women's container, and the pointer back to its nation.
+    pub container_uid: u64,
+    pub container_teams: u64,
+    pub container_women: u64,
+    pub container_nation: u64,
+    /// In a nation: its three-letter code as an FM string pointer, and the pointers to its men's and women's container.
+    pub nation_code: u64,
+    pub nation_men: u64,
+    pub nation_women: u64,
 }
 
 /// The game's tables of first, last and common names (see `names.rs`): where it keeps the list of each table's entries
@@ -152,6 +176,10 @@ pub struct CompetitionLayout {
     /// FM string pointers, to names in the game's language.
     pub name: u64,
     pub short_name: u64,
+    /// Pointer to the nation whose competition it is (England for the Premier League); unset where the layout has
+    /// not placed it.
+    #[serde(default)]
+    pub nation: Option<u64>,
 }
 
 /// The prize money a competition's stages pay, which their settings hold (see `prize_money.rs`).
@@ -176,6 +204,49 @@ pub struct PrizeMoneyLayout {
     pub win_again: u64,
     pub draw: u64,
     pub loss: u64,
+}
+
+/// The sponsorship deals a club holds (see `sponsorship.rs`): the club points at a `(begin, end, capacity)` record whose
+/// list holds one pointer per deal, and each pointer leads to an entry of `entry_size` bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SponsorshipLayout {
+    /// In the club: the pointer to the record that holds the list of deals.
+    pub club_list: u64,
+    /// The size of an entry.
+    pub entry_size: u64,
+    /// In an entry: the start and the end date, each a `u16` day of the year and a `u16` year.
+    pub start: u64,
+    pub end: u64,
+    /// In an entry: `u32` pounds, the total value of the deal and the amount per season.
+    pub total: u64,
+    pub per_season: u64,
+    /// In an entry: a `u16` percentage, by which the deal falls on relegation (or, for a kit manufacturer, rises on a
+    /// promotion to the top division).
+    pub percent: u64,
+    /// In an entry: a `u16`, the club's reputation when the deal was signed.
+    pub reputation: u64,
+    /// In an entry: a `u8` kind, which the game names in its Sponsorship screen.
+    pub kind: u64,
+}
+
+impl SponsorshipLayout {
+    /// How many bytes of an entry the editor reads.
+    pub fn end_of_entry(&self) -> u64 {
+        [
+            self.start + 4,
+            self.end + 4,
+            self.total + 4,
+            self.per_season + 4,
+            self.percent + 2,
+            self.reputation + 2,
+            self.kind + 1,
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(0)
+        .max(self.entry_size)
+    }
 }
 
 /// One of the game's pools of objects (see `object_pool.rs`), a static of the game plugin, from where it keeps the
@@ -751,6 +822,10 @@ pub struct TeamLayout {
     /// manager is then left as he is.
     #[serde(default)]
     pub manager: Option<u64>,
+    /// Pointer to the league the team plays in this season (a competition), null for none; unset where the layout has
+    /// not placed it.
+    #[serde(default)]
+    pub competition: Option<u64>,
 }
 
 impl TeamLayout {
@@ -765,6 +840,7 @@ impl TeamLayout {
             self.vice_captain + 8,
             self.reputation + 2,
             self.manager.map_or(0, |at| at + 8),
+            self.competition.map_or(0, |at| at + 8),
         ]
         .into_iter()
         .max()
@@ -791,6 +867,10 @@ pub struct ClubLayout {
     /// where the layout has not placed it, and a director of football is then left as he is.
     #[serde(default)]
     pub director_of_football: Option<u64>,
+    /// Pointer to the nation the club is from, as its profile in the game names it (Wales for Cardiff City, who play
+    /// in England); unset where the layout has not placed it.
+    #[serde(default)]
+    pub nation: Option<u64>,
 }
 
 impl ClubLayout {
@@ -807,6 +887,7 @@ impl ClubLayout {
             self.coaching_staff + 24,
             self.scouting_staff + 24,
             self.director_of_football.map_or(0, |at| at + 8),
+            self.nation.map_or(0, |at| at + 8),
         ]
         .into_iter()
         .max()
@@ -963,6 +1044,46 @@ pub struct BuildProfile {
     /// RVA in the game plugin of the static pointer to the training manager (`TRAINING_MANAGER`), which keeps the
     /// history of training of the human managers' players.
     pub training_manager: Option<u64>,
+    /// Whether the prize money competitions pay ([`PrizeMoneyLayout`]) was read on this build and found to be what the
+    /// game shows. The app shows and changes it only on such builds; the probe reads it on any.
+    #[serde(default)]
+    pub prize_money: bool,
+    /// Whether a club's sponsorship deals ([`SponsorshipLayout`]) were read on this build and matched to the game's
+    /// Sponsorship screen. The app shows them only on such builds; the probe reads them on any.
+    #[serde(default)]
+    pub sponsorships: bool,
+    /// Where the build keeps its arrays of national teams' containers, for the builds they were read on; none where
+    /// they were not, which leaves the National teams tab off.
+    #[serde(default)]
+    pub national_teams: Option<NationalArrays>,
+    /// What the build lays out otherwise than the edition's layout, field by field (see [`layout_of`]): since the update
+    /// of 17 November 2026 (Game Pass 0.9.2524.0, Steam build 26620374), corporate facilities in the club finance record
+    /// and, in a team's tactics, the list of tactics and the index of the one in use, each a few bytes further on.
+    /// Empty where the layout holds.
+    #[serde(default)]
+    pub layout: LayoutOverrides,
+}
+
+/// RVAs in the game plugin of the `(begin, end)` pointer pairs of the arrays of national teams' containers: one holds a
+/// container for each nation's men's teams and the other for its women's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NationalArrays {
+    pub men: u64,
+    pub women: u64,
+}
+
+/// What a build lays out otherwise than the edition's layout (`layout.toml`), as its profile's `[layout.<section>]`
+/// tables give it: offsets by the layout's section and field, each put in place of the layout's (see [`layout_of`]).
+/// A layout that changed with an update can only change for the builds since: the builds before keep it as it was.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+pub struct LayoutOverrides(pub BTreeMap<String, BTreeMap<String, u64>>);
+
+impl LayoutOverrides {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// Identifies a build of the game plugin from its headers as mapped in memory.
@@ -1045,10 +1166,12 @@ const BUILDS: &[&str] = &[
     include_str!("../../../profiles/fm27/gamepass-0.9.2355.0.toml"),
     include_str!("../../../profiles/fm27/gamepass-0.9.2409.0.toml"),
     include_str!("../../../profiles/fm27/gamepass-0.9.2435.0.toml"),
+    include_str!("../../../profiles/fm27/gamepass-0.9.2524.0.toml"),
     include_str!("../../../profiles/fm27/steam-26227640.toml"),
     include_str!("../../../profiles/fm27/steam-26340721.toml"),
     include_str!("../../../profiles/fm27/steam-26385295.toml"),
     include_str!("../../../profiles/fm27/steam-26577676.toml"),
+    include_str!("../../../profiles/fm27/steam-26620374.toml"),
     include_str!("../../../profiles/fm27/steam-26227640-macos-x86_64.toml"),
     include_str!("../../../profiles/fm27/steam-26227640-macos-arm64.toml"),
     include_str!("../../../profiles/fm27/steam-26340721-macos-x86_64.toml"),
@@ -1057,11 +1180,35 @@ const BUILDS: &[&str] = &[
     include_str!("../../../profiles/fm27/steam-26385295-macos-arm64.toml"),
     include_str!("../../../profiles/fm27/steam-26577676-macos-x86_64.toml"),
     include_str!("../../../profiles/fm27/steam-26577676-macos-arm64.toml"),
+    include_str!("../../../profiles/fm27/steam-26620374-macos-x86_64.toml"),
+    include_str!("../../../profiles/fm27/steam-26620374-macos-arm64.toml"),
 ];
 
 /// The built-in object layout for `edition`, if there is one.
 pub fn layout_for(edition: u32) -> Option<Layout> {
-    LAYOUTS.iter().map(|text| parse::<Layout>(text)).find(|layout| layout.edition == edition)
+    layout_of(edition, &LayoutOverrides::default())
+}
+
+/// The built-in object layout for `edition` as a build lays it out: with each field `overrides` names (its profile's
+/// [`BuildProfile::layout`]) at the offset given there. A section the layout does not have is left out, as a Windows
+/// build's profile is on macOS, whose layout is another; a field it does not have is refused when it is read.
+pub fn layout_of(edition: u32, overrides: &LayoutOverrides) -> Option<Layout> {
+    LAYOUTS.iter().find_map(|text| {
+        let mut layout: toml::Table = parse(text);
+        if layout.get("edition").and_then(toml::Value::as_integer) != Some(i64::from(edition)) {
+            return None;
+        }
+        for (section, fields) in &overrides.0 {
+            let Some(toml::Value::Table(section)) = layout.get_mut(section) else {
+                continue;
+            };
+            for (field, &offset) in fields {
+                let offset = i64::try_from(offset).expect("an offset within an object");
+                section.insert(field.clone(), toml::Value::Integer(offset));
+            }
+        }
+        Some(toml::Value::Table(layout).try_into().expect("built-in profiles are checked by the unit tests"))
+    })
 }
 
 /// The built-in build profile matching `fingerprint`, if there is one.
@@ -1121,6 +1268,12 @@ pub fn profile_text(profile: &BuildProfile, notes: &ProfileNotes) -> String {
     if let Some(rva) = profile.training_manager {
         text += &format!("\ntraining_manager = {rva:#X}\n");
     }
+    if profile.prize_money {
+        text += "\nprize_money = true\n";
+    }
+    if profile.sponsorships {
+        text += "\nsponsorships = true\n";
+    }
     text += "\n# game_plugin as mapped in memory; these values identify the build.\n[plugin]\n";
     match profile.plugin {
         PluginFingerprint::Pe { size_of_image, link_timestamp } => {
@@ -1131,6 +1284,17 @@ pub fn profile_text(profile: &BuildProfile, notes: &ProfileNotes) -> String {
     let ArrayRvas { players, staff, clubs } = profile.arrays;
     text += "\n# RVAs in game_plugin of the (begin, end) pointer pairs of the entity arrays.\n[arrays]\n";
     text += &format!("players = {players:#X}\nstaff = {staff:#X}\nclubs = {clubs:#X}\n");
+    if let Some(NationalArrays { men, women }) = profile.national_teams {
+        text += &format!(
+            "\n# RVAs of the pairs of the arrays of national teams' containers.\n[national_teams]\nmen = {men:#X}\nwomen = {women:#X}\n"
+        );
+    }
+    for (section, fields) in &profile.layout.0 {
+        text += &format!("\n# What the build lays out otherwise than layout.toml.\n[layout.{section}]\n");
+        for (field, offset) in fields {
+            text += &format!("{field} = {offset:#X}\n");
+        }
+    }
     text
 }
 
@@ -1193,6 +1357,16 @@ mod tests {
         assert_eq!(mac.competition, windows.competition);
         assert_eq!(mac.player.identity() - mac.player.person_block, mac.staff.identity() - mac.staff.person_block);
 
+        // A nation's containers of national teams read alike; the nation keeps its pointers to them 8 bytes later on
+        // the Mac, as everything from its capital on.
+        let (w, m) =
+            (windows.national.as_ref().expect("national teams"), mac.national.as_ref().expect("national teams"));
+        assert_eq!(
+            (m.container_uid, m.container_teams, m.container_women, m.container_nation, m.nation_code),
+            (w.container_uid, w.container_teams, w.container_women, w.container_nation, w.nation_code)
+        );
+        assert_eq!((m.nation_men, m.nation_women), (w.nation_men + 8, w.nation_women + 8));
+
         // The tables of names are reached and laid out alike.
         assert!(windows.names.is_some());
         assert_eq!(mac.names, windows.names);
@@ -1207,6 +1381,10 @@ mod tests {
         assert_eq!(mac.team.end(), windows.team.end());
         assert_eq!(mac.team.manager, windows.team.manager);
         assert_eq!(mac.club.director_of_football, windows.club.director_of_football);
+        // Where a club keeps its nation, and a team its league.
+        assert!(windows.club.nation.is_some() && windows.team.competition.is_some());
+        assert_eq!(mac.club.nation, windows.club.nation);
+        assert_eq!(mac.team.competition, windows.team.competition);
         assert_eq!(mac.club_finance.end(), windows.club_finance.end());
         assert_eq!(
             (mac.ban.list, mac.ban.started, mac.ban.marker, mac.ban.matches),
@@ -1333,6 +1511,43 @@ mod tests {
         let fingerprint = PluginFingerprint::Pe { size_of_image: 0x185F_A000, link_timestamp: 0x6AF3_8E5C };
         let update = profile_for(fingerprint).expect("Steam build 26577676 profile");
         assert_eq!((update.tactics_manager, update.training_manager), (steam.tactics_manager, steam.training_manager));
+
+        // The update of 17 November 2026 on Game Pass (0.9.2524.0): the statics moved again, and the retirement
+        // manager's no longer sits as far from the players pair, nor the game's own object's; the tactics manager's
+        // is still 0xD0 after the retirement manager's.
+        let fingerprint = PluginFingerprint::Pe { size_of_image: 0x179A_D000, link_timestamp: 0x6AF5_C8C6 };
+        let profile = profile_for(fingerprint).expect("Game Pass 0.9.2524.0 profile");
+        assert_eq!(
+            (profile.storefront, profile.package_version.as_deref()),
+            (Storefront::GamePass, Some("0.9.2524.0"))
+        );
+        assert_eq!(
+            (profile.arrays.players, profile.arrays.staff, profile.arrays.clubs),
+            (0x53F_AE88, 0x53F_AED0, 0x53F_B040)
+        );
+        assert_eq!(profile.current_date, Some(0x539_DD10));
+        assert_eq!(profile.retirement_manager, Some(profile.arrays.players - 0xD2E8));
+        assert_eq!(profile.game_ui, Some(profile.arrays.players + 0xBB8));
+        assert_eq!(profile.tactics_manager, profile.retirement_manager.map(|rva| rva + 0xD0));
+        assert_eq!(profile.training_manager, Some(0x53E_A210));
+        let national = profile.national_teams.expect("the national teams' arrays");
+        assert_eq!((national.men, national.women), (profile.arrays.players + 0xA8, profile.arrays.players + 0xC0));
+        // The same update on Steam (build 26620374): the game's own object as far from the players pair, the
+        // retirement manager not.
+        let fingerprint = PluginFingerprint::Pe { size_of_image: 0x1887_8000, link_timestamp: 0x6AF5_C68F };
+        let steam = profile_for(fingerprint).expect("Steam build 26620374 profile");
+        assert_eq!((steam.storefront, steam.package_version.as_deref()), (Storefront::Steam, None));
+        assert_eq!(
+            (steam.arrays.players, steam.arrays.staff, steam.arrays.clubs),
+            (0x587_B8B8, 0x587_B900, 0x587_BA70)
+        );
+        assert_eq!(steam.current_date, Some(0x582_68E0));
+        assert_eq!(steam.retirement_manager, Some(steam.arrays.players - 0xC068));
+        assert_eq!(steam.game_ui, Some(steam.arrays.players + 0xBB8));
+        assert_eq!(steam.tactics_manager, steam.retirement_manager.map(|rva| rva + 0xD0));
+        assert_eq!(steam.training_manager, Some(0x586_BED0));
+        let national = steam.national_teams.expect("the national teams' arrays");
+        assert_eq!((national.men, national.women), (steam.arrays.players + 0xA8, steam.arrays.players + 0xC0));
         // The Windows layout walks MSVC's maps; the Mac's does not say, and walks libc++'s.
         let familiarity = layout.familiarity.as_ref().expect("the Windows layout places familiarity");
         assert_eq!((familiarity.tree, layout.tactics.as_ref().map(|t| t.tree)), (Tree::Msvc, Some(Tree::Msvc)));
@@ -1449,12 +1664,35 @@ mod tests {
             );
         }
 
+        // The update of 17 November 2026 (Steam build 26620374, 27.1.0.2505117): new UUIDs, and every place moved on
+        // with __DATA (0x34000 in the arm64 half, 0x50000 in the Intel one), the date and the retirement manager's
+        // static 0x10 more, the arrays 0x178 and 0x180 more.
+        let uuid = [0x86, 0x9F, 0x5F, 0x90, 0xFD, 0x89, 0x36, 0x06, 0x8A, 0xE4, 0x2B, 0x4A, 0x7F, 0x02, 0xF3, 0x24];
+        let arm = profile_for(PluginFingerprint::MachO { uuid }).expect("the arm64 half of Steam build 26620374");
+        assert_eq!((arm.arrays.players, arm.arrays.staff, arm.arrays.clubs), (0x57A_2FC8, 0x57A_3010, 0x57A_3180));
+        assert_eq!(arm.current_date, Some(0x578_1DC8));
+        assert_eq!(arm.retirement_manager, Some(0x577_82B8));
+        assert_eq!(arm.game_ui, Some(0x577_4B60));
+        assert_eq!((arm.tactics_manager, arm.training_manager), (Some(0x577_8320), Some(0x577_5758)));
+        assert_eq!(arm.tactics_manager, arm.retirement_manager.map(|rva| rva + 0x68));
+        let national = arm.national_teams.expect("the national teams' arrays");
+        assert_eq!((national.men, national.women), (arm.arrays.players + 0xA8, arm.arrays.players + 0xC0));
+        let uuid = [0x86, 0x46, 0x25, 0xAF, 0x9A, 0xA9, 0x32, 0x54, 0x8E, 0xC5, 0x47, 0xE9, 0xD4, 0x86, 0x13, 0x2A];
+        let intel = profile_for(PluginFingerprint::MachO { uuid }).expect("the Intel half of Steam build 26620374");
+        assert_eq!(
+            (intel.arrays.players, intel.arrays.staff, intel.arrays.clubs),
+            (0x5D5_3368, 0x5D5_33B0, 0x5D5_3520)
+        );
+        assert_eq!(intel.current_date, Some(0x5D3_3710));
+        assert_eq!(intel.retirement_manager, intel.current_date.map(|rva| rva - 0x9810));
+        assert_eq!(intel.game_ui, Some(intel.arrays.players + 0x1AE8));
+
         // On Windows the Launch Preview's date sits with the arrays.
         let fingerprint = PluginFingerprint::Pe { size_of_image: 0x19E6_9000, link_timestamp: 0x6ADF_B11C };
         assert_eq!(profile_for(fingerprint).and_then(|profile| profile.current_date), None);
 
-        // The builds of November 2026 on Windows and 27.0.1 on the Mac place the game's own object; on the others the
-        // editor looks for it as far from the players pair as there, or else for a pointer to it.
+        // The builds of November 2026 on Windows and those since 27.0.1 on the Mac place the game's own object; on the
+        // others the editor looks for it as far from the players pair as there, or else for a pointer to it.
         let placed: Vec<String> =
             built_in_profiles().filter(|profile| profile.game_ui.is_some()).map(|profile| profile.name).collect();
         assert_eq!(
@@ -1462,13 +1700,17 @@ mod tests {
             [
                 "FM27 0.9.2409.0 (Game Pass)",
                 "FM27 0.9.2435.0 (Game Pass)",
+                "FM27 0.9.2524.0 (Game Pass)",
                 "FM27 Steam build 26340721 (27.0.0)",
                 "FM27 Steam build 26385295 (27.0.1)",
                 "FM27 Steam build 26577676",
+                "FM27 Steam build 26620374",
                 "FM27 Steam build 26385295 (27.0.1, macOS, Intel)",
                 "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
                 "FM27 Steam build 26577676 (macOS, Intel)",
                 "FM27 Steam build 26577676 (macOS, Apple silicon)",
+                "FM27 Steam build 26620374 (macOS, Intel)",
+                "FM27 Steam build 26620374 (macOS, Apple silicon)",
             ]
         );
     }
@@ -1494,6 +1736,117 @@ mod tests {
         for (i, profile) in profiles.iter().enumerate() {
             assert!(profiles[i + 1..].iter().all(|other| other.plugin != profile.plugin), "{} twice", profile.name);
             assert_eq!(profile.edition, 27, "{}", profile.name);
+        }
+    }
+
+    /// The app shows the prize money only on the builds it was read and checked on (#123): no others until someone has.
+    #[test]
+    fn prize_money_is_shown_only_on_the_builds_it_was_checked_on() {
+        let mut checked: Vec<String> =
+            built_in_profiles().filter(|profile| profile.prize_money).map(|profile| profile.name).collect();
+        checked.sort();
+        assert_eq!(
+            checked,
+            [
+                "FM27 0.9.2409.0 (Game Pass)",
+                "FM27 0.9.2435.0 (Game Pass)",
+                "FM27 0.9.2524.0 (Game Pass)",
+                "FM27 Steam build 26340721 (27.0.0)",
+                "FM27 Steam build 26340721 (27.0.0, macOS, Apple silicon)",
+                "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
+                "FM27 Steam build 26577676",
+                "FM27 Steam build 26620374",
+                "FM27 Steam build 26620374 (macOS, Apple silicon)",
+            ]
+        );
+    }
+
+    /// The app shows a club's sponsorship deals only on the builds they were read on (#114): the Windows build the
+    /// issue's reports are from and the Mac build they were matched to the game's screen on, and Game Pass 0.9.2524.0,
+    /// where the deals of 90 clubs were read.
+    #[test]
+    fn sponsorships_are_shown_only_on_the_builds_they_were_checked_on() {
+        let mut checked: Vec<String> =
+            built_in_profiles().filter(|profile| profile.sponsorships).map(|profile| profile.name).collect();
+        checked.sort();
+        assert_eq!(
+            checked,
+            [
+                "FM27 0.9.2524.0 (Game Pass)",
+                "FM27 Steam build 26340721 (27.0.0)",
+                "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"
+            ]
+        );
+        assert!(layout_for(27).is_some_and(|layout| layout.sponsorship.is_some()));
+    }
+
+    /// Since the update of 17 November 2026 the club finance record keeps corporate facilities 4 bytes further on, and a
+    /// team's tactics their list and the index of the one in use 8 bytes further on: the profiles of its builds say
+    /// so, and the layout of a session over one of them has them there; every other build keeps the layout's places,
+    /// and nothing else moves.
+    #[test]
+    fn builds_lay_out_what_their_profiles_say() {
+        let layout = layout_for(27).expect("FM27 layout");
+        let tactics = layout.tactics.as_ref().expect("the layout places the tactics");
+        // A profile's offsets are its layout's: Windows builds' are layout.toml's, the Mac halves' layout-macos.toml's.
+        let windows = |profile: &BuildProfile| matches!(profile.plugin, PluginFingerprint::Pe { .. });
+        let moved = |on_windows: bool| -> Vec<String> {
+            built_in_profiles()
+                .filter(|profile| !profile.layout.is_empty() && windows(profile) == on_windows)
+                .map(|profile| profile.name)
+                .collect()
+        };
+        assert_eq!(moved(true), ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374"]);
+        assert_eq!(
+            moved(false),
+            ["FM27 Steam build 26620374 (macOS, Intel)", "FM27 Steam build 26620374 (macOS, Apple silicon)"]
+        );
+        for profile in built_in_profiles() {
+            let laid = layout_of(27, &profile.layout).expect("FM27 layout");
+            let moved = |section: &str, field: &str| profile.layout.0.get(section).and_then(|fields| fields.get(field));
+            let at = |section: &str, field: &str, otherwise: u64| moved(section, field).copied().unwrap_or(otherwise);
+            assert_eq!(
+                laid.club_finance.corporate,
+                at("club_finance", "corporate", layout.club_finance.corporate),
+                "{}",
+                profile.name
+            );
+            let laid_tactics = laid.tactics.as_ref().expect("the layout places the tactics");
+            assert_eq!(
+                (laid_tactics.tactics, laid_tactics.current, laid_tactics.instructions),
+                (
+                    at("tactics", "tactics", tactics.tactics),
+                    at("tactics", "current", tactics.current),
+                    tactics.instructions
+                ),
+                "{}",
+                profile.name
+            );
+            let (f, g) = (&laid.club_finance, &layout.club_finance);
+            assert_eq!(
+                (f.balance, f.transfer_budget, f.total_wage_budget, f.wage_budget, f.ticket_price),
+                (g.balance, g.transfer_budget, g.total_wage_budget, g.wage_budget, g.ticket_price),
+                "{}",
+                profile.name
+            );
+        }
+        // On Windows: the new builds' places, 4 and 8 bytes past the old ones.
+        #[cfg(windows)]
+        for profile in built_in_profiles().filter(|profile| !profile.layout.is_empty() && windows(profile)) {
+            let laid = layout_of(27, &profile.layout).expect("FM27 layout");
+            let laid_tactics = laid.tactics.expect("the layout places the tactics");
+            assert_eq!(laid.club_finance.corporate, 0x8AD, "{}", profile.name);
+            assert_eq!((laid_tactics.tactics, laid_tactics.current), (0x1018, 0x1030), "{}", profile.name);
+            assert_eq!((layout.club_finance.corporate, tactics.tactics, tactics.current), (0x8A9, 0x1010, 0x1028));
+        }
+        // On macOS: the Mac halves of the same update, as many bytes past the Mac layout's places.
+        #[cfg(target_os = "macos")]
+        for profile in built_in_profiles().filter(|profile| !profile.layout.is_empty() && !windows(profile)) {
+            let laid = layout_of(27, &profile.layout).expect("FM27 layout");
+            let laid_tactics = laid.tactics.expect("the layout places the tactics");
+            assert_eq!(laid.club_finance.corporate, 0x8AD, "{}", profile.name);
+            assert_eq!((laid_tactics.tactics, laid_tactics.current), (0x1008, 0x1020), "{}", profile.name);
+            assert_eq!((layout.club_finance.corporate, tactics.tactics, tactics.current), (0x8A9, 0x1000, 0x1018));
         }
     }
 

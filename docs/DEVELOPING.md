@@ -74,6 +74,33 @@ same object at the same place (read on Steam build 26385295, where loading the s
 Copy diagnostics (and `fmlibre-probe diagnostics`) says where the count was read, how it was found and what it is
 ("Saves loaded"), and its Writing line says when writes wait for Reload data.
 
+### National teams
+
+The Clubs tab lists the nations' national teams behind its National teams switch (`TeamsSwitch`), read from two arrays
+of containers in the game plugin's writable data (see [fm27-national-teams.md](recon/fm27-national-teams.md)). Where
+they are is a matter of the build, and a build profile names them under `[national_teams]` (`men` and `women`, the RVAs
+of their `(begin, end)` pairs); how a container reads is the layout's `[national]` section, in `layout.toml` and
+`layout-macos.toml` (the nation points at its containers 8 bytes earlier on Windows). A build whose profile has no
+`[national_teams]`, or whose arrays do not read as the game's (a container must point at a nation that points back at
+it, with the kind it is in; nearly all of them must), shows a note saying why in place of the list, and reads nothing
+else. The profiles that name them:
+Game Pass 0.9.2435.0 and 0.9.2524.0 and Steam builds 26577676 and 26620374 on Windows, and Steam builds 26385295 and
+26620374 on macOS, Apple silicon. For another build, find the two arrays as the recon note says (`fmlibre-probe instances
+db::NATION` leads to the nations, which point at the containers; the arrays are the two pairs of pointers to them that
+sit next to the clubs' array: on each of those builds 0xA8 and 0xC0 past the players' pair, which
+`fmlibre-probe column game_plugin.dll+<RVA> 0x0C` shows as 251 UIDs each) and add them; the unit test
+`only_the_builds_read_place_the_national_teams` lists the builds that have them.
+
+Each container lists the senior team and the youth teams, laid out as a club's teams (`[team]`). A national team's
+profile reads them all (`Session::national_sides`) and edits each one's reputation: `reputation` is the senior team's,
+`team.<kind>.reputation` the one team of that kind in the container (`Place::NationalTeamOfKind`), for the kinds in
+`national::OTHER_KINDS`. A kind two teams of a container share is neither shown nor written. The app names the kinds by
+`national.teamKinds` in the languages' files, and a kind missing there as "Type N".
+
+The senior team's profile has Heal all, Inspire all and Refresh all for the players it lists, as a club's Squad tab
+has them: the `national_team_action` command reads the squad (`Session::national_squad`) and hands it to
+`act_on_players`, which `team_action` uses for a club's team too. The changes are one batch, undone as one.
+
 ### After an update of the game
 
 Each build of the game moves its static data. A build profile in `profiles/` (identified by `game_plugin`'s headers)
@@ -133,6 +160,21 @@ Each check was tried against a layout broken on purpose (a field group moved by 
 such layout failed its check. A layout that changed is not found again automatically: its checks keep what they cover
 read-only until `profiles/fm27/layout.toml` is fixed.
 
+Some of what the layout places has no check of its own, and a change there only leaves something unread. The update
+of 17 November 2026 made two such changes:
+- The club finance record moved corporate facilities from 0x8A9 to 0x8AD. The full record is told from the smaller one
+  of the clubs outside the leagues being played by values that look real (`finances_look_real` in `clubs.rs`), so no
+  club's finances were read.
+- A team's tactics moved the list of tactics from 0x1010 to 0x1018 and the index of the one in use from 0x1028 to
+  0x1030, so no tactic was found in use, and the players' familiarity with it was not read (nor Max tactics offered).
+
+The Mac halves of Steam build 26620374 made the same two changes on the Mac layout's places: corporate facilities from
+0x8A9 to 0x8AD, and the tactics from 0x1000 and 0x1018 to 0x1008 and 0x1020.
+
+As the builds before keep the old places, the layout keeps them, and the profiles of the builds since say where theirs
+are, in `[layout.<section>]` tables: a session reads its build's layout with those fields in place of the layout's
+(`layout_of`). The smoke tests `clubs` (finances) and `tactics` notice either change.
+
 #### On the day of an update
 
 1. Load a save in the updated game. If the probe finds values that read as two dates a day apart (the value the
@@ -141,8 +183,21 @@ read-only until `profiles/fm27/layout.toml` is fixed.
 2. `fmlibre-probe profile --out profiles/fm27/<storefront>-<version>.toml` looks for everything as for a build
    without a profile, runs the checks with what it found, and writes the profile. It lists the values that read as a
    plausible date, and whether the guessed and the searched places of the retirement manager and of the game object
-   agree.
+   agree. It does not look for the tactics and training managers, the national teams' arrays or what the build lays
+   out otherwise (it keeps those of the built-in profile, where there is one; for a new build, find them as their
+   notes in the other profiles say), but it says whether the class of the full finance record is found: where the
+   game keeps finances for the clubs of the leagues being played and it is not, the record moved. Compare a club's
+   record (the pointer at +0x150 of the object `fmlibre-probe club UID` names, dumped with `fmlibre-probe dump`) with
+   what the build before read for the same club (an export of the clubs, `fmlibre-probe clubs --export`), and put
+   what moved under the profile's `[layout.club_finance]`; `fmlibre-probe fields club --stats` then finds the class.
+   Likewise, where `fmlibre-probe training-history <the human manager's club>` finds no tactic in use, follow the
+   tactics manager's map to the team's tactics as `[tactics]` in layout.toml describes it, and put what moved under
+   `[layout.tactics]`.
 3. Add the file to `BUILDS` in `crates/fmlibre-core/src/profile.rs`; a unit test fails until it is there.
+   A club's finances show no league prize money on the new build, and cannot change it, until someone has checked
+   that `fmlibre-probe prizes` lists the amounts the game's Rules pages show, and added `prize_money = true` to the
+   profile. The same goes for a club's sponsorship deals: `fmlibre-probe sponsorships <club UID>` has to list the
+   deals the game's Sponsorship screen shows, with its amounts and dates, before `sponsorships = true` goes in.
 4. Build the app (`npm run release`), and run the smoke tests on both storefronts (see
    [`tools/smoke`](../tools/smoke/README.md)).
 
@@ -243,7 +298,15 @@ The app remembers what was frozen in each save in `frozen.json` in its data fold
 apart by the storefront and the UIDs of its human managers. To test without touching that
 file, set `FMLIBRE_DATA` to another folder before starting the app.
 
-The same file keeps the names the editor gave stadiums. The game keeps no stadium names in
+The changes written to each career are kept in the same data folder, in
+`history\<storefront>-<UIDs of the human managers>.jsonl`: one JSON line per change or undo, added
+to the end as they are made, so the Changes view lists them again after a restart (see `History`
+in `app/src-tauri/src/lib.rs`). A change from an earlier session is undone as a new edit back to
+its old value, with every check; one whose undo needed the game's memory as it was (a move,
+healing, a tie, a clause, a name...) stays as history. Clear history in the Changes view empties
+the file.
+
+The same file as the freezes (`frozen.json`) keeps the names the editor gave stadiums. The game keeps no stadium names in
 its saves and gives each stadium the name in its database whenever it loads one, so the app
 gives the new names again: on connecting, on a reload, and from its hold, which every 2 s
 notices when the game has loaded a save (the clubs' array has moved), checks it is the same
@@ -251,7 +314,10 @@ save before writing, and reads the clubs again (see `Connection::hold_stadiums`)
 
 Exports go to `Documents\FMLibreEditor\Exports` (`~/Documents/FMLibreEditor/Exports` on
 macOS); `FMLIBRE_EXPORTS` names another folder. The columns and the JSON keys are in
-`crates/fmlibre-core/src/export.rs`.
+`crates/fmlibre-core/src/export.rs`. The Changes view's export (`export_changes`) is CSV only: the
+window sends the rows its search and filters leave, with the texts only it has (the values as
+shown, the field's name, the time in its zone), and `export_changes` in `export.rs` writes them
+with the same quoting, separator and byte order mark as the lists.
 
 ### Releasing
 
@@ -261,17 +327,24 @@ macOS); `FMLIBRE_EXPORTS` names another folder. The columns and the JSON keys ar
    - `app/src-tauri/tauri.conf.json`.
 
    Commit the bump.
+
+   **What's new:** before that, add the version to `whatsNew.versions` in `app/src/i18n/en.ts`
+   (a few short lines, each led by a few words in bold) and in the other languages, and the
+   people to thank to `THANKS` in `app/src/whatsNew.ts`. The app shows them once, the first
+   time it starts after it was updated to that version; a language without the version shows
+   it in English, and a version with no notes shows nothing.
 2. **Tag it and push the tag:** `git tag v0.1.0` and `git push origin v0.1.0`.
-3. **The `Release` workflow** (`.github/workflows/release.yml`) runs the checks and builds,
-   on GitHub's Windows and macOS machines:
+3. **The `Release` workflow** (`.github/workflows/release.yml`) builds, on GitHub's Windows
+   and macOS machines:
    - `FMLibreEditor-Setup.exe`, a per-user NSIS installer in English, Turkish, Spanish, German,
-     French, Italian, Japanese, Korean and Russian;
+     French, Italian, Japanese, Korean, Russian and Simplified Chinese;
    - `FMLibreEditor-portable.zip`;
    - `FMLibreEditor-macOS.zip`, the universal app with the bridge and its launcher;
    - `FMLibreEditor-macOS.app.tar.gz`, the same app, which installed macOS apps update from.
 
-   It opens a **draft** release with these files, `latest.json` and
-   `docs/release-notes.md` as its text.
+   Once CI has passed for the tagged commit (the checks are CI's, and are not run again), it
+   opens a **draft** release with these files, `latest.json` and `docs/release-notes.md` as its
+   text. The version bump's pull request builds none of them; the tag does.
 4. **Write what is new in the draft and publish it.** From then on, installed Windows copies
    and macOS apps of a version with the updater (any after 0.4.1) offer **Update** in their
    notice.
@@ -290,12 +363,15 @@ signature against the public key in the same file.
   the new version.
 - **macOS:** the app in `FMLibreEditor-macOS.app.tar.gz` takes the place of the running
   one's bundle (macOS asks for an administrator's password where the user may not change
-  it), and the app starts again (`restart_app`). At startup an app run from its bundle puts
-  its bridge and launcher in place of the installed ones where they differ
-  (`bridge_setup::refresh`), so the game loads the new bridge the next time it starts.
+  it), and the app starts again (`restart_app`). An app opened where it was downloaded runs
+  from a read-only copy (App Translocation): the bundle it was copied from, which the
+  Security framework names, is the one replaced and started again
+  (`app/src-tauri/src/self_update.rs`). The new bundle is not quarantined, so macOS runs it
+  where it is from then on. At startup an app run from its bundle puts its bridge and
+  launcher in place of the installed ones where they differ (`bridge_setup::refresh`), so
+  the game loads the new bridge the next time it starts.
 
-Portable copies, a macOS app that macOS runs from where it was downloaded (App
-Translocation) and development builds open the release's page instead (`can_self_update`).
+Portable copies and development builds open the release's page instead (`can_self_update`).
 
 The workflow signs the installer and the macOS archive with the private key in the
 repository's secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,
@@ -322,6 +398,7 @@ fmlibre-probe players --max-age 21 --export young.csv   # every match to a file,
 fmlibre-probe player 7458500                         # everything read for one player
 fmlibre-probe staff arteta                           # search staff; staff-member <id> for details; --export FILE as players
 fmlibre-probe clubs tottenham                        # search clubs; club <uid> for details; --export FILE as players
+fmlibre-probe national-teams italia --squad            # a nation's men's and women's teams, and the first one's squad; no writes
 fmlibre-probe fields player                          # what the editor can change (also: staff)
 fmlibre-probe get player 7458500                     # those fields' values for one player
 fmlibre-probe set player 7458500 attribute.finishing 18 --shown   # change one: this writes to the game
@@ -336,6 +413,8 @@ fmlibre-probe staff-move 4000571 1139 --restore      # move a member of staff to
 fmlibre-probe staff-move 4102655 676 --job 88 --restore   # the same, as another job (a code, see staff-job)
 fmlibre-probe staff-job 4000571 14 --restore         # give a member of staff another job and back: this writes too
 fmlibre-probe staff-sign 9318 728 2 --restore        # sign one with no club, as a coach, and back: this writes too
+fmlibre-probe staff-release 5129148 103353 --restore # release staff from their clubs and back: this writes too
+fmlibre-probe staff-refs 5129148 --show "no class"   # what points at a member of staff, by holder; no writes
 fmlibre-probe staff-places                           # where clubs keep their staff, job by job; no writes
 fmlibre-probe staff-places --club-offset 0x148       # what one place of every club holds: its director of football
 fmlibre-probe contract-classes                       # full and basic contracts of players and staff, counted
@@ -355,6 +434,7 @@ fmlibre-probe concerns --all                         # every reason to be unhapp
 fmlibre-probe captain 680 43425040 --restore         # make a player captain (--vice: vice-captain) and back
 fmlibre-probe prizes                                 # the prize money competitions pay, by final position and per match
 fmlibre-probe prizes 130286 --win 1234567 --restore  # change what a Süper Lig win pays and back: this writes too
+fmlibre-probe sponsorships 2188                      # a club's sponsorship deals: kind, term, amounts (reads only)
 fmlibre-probe scan                                   # find arrays of game objects in game_plugin.dll
 fmlibre-probe refs 0x1a5a5396990 --span 0x3c8        # every pointer into an object (holders, lists, squads too)
 fmlibre-probe dump game_plugin.dll+0x1000 --len 0x100
@@ -368,15 +448,16 @@ Addresses and lengths are hexadecimal. Add `--json report.json` to `info` or `sc
 to save the results. `calibrate --scan` ignores the build profile and finds the
 arrays, the in-game date, the retirement manager and the game object the way it would on an unknown build.
 
-Only `set`, `move`, `swap`, `release`, `staff-move`, `staff-job`, `staff-sign`, `heal --heal`,
+Only `set`, `move`, `swap`, `release`, `staff-move`, `staff-job`, `staff-sign`, `staff-release`, `heal --heal`,
 `bans --lift`, `tie-set`, `tie-add`, `tie-remove`, `captain`, `cohesion --set`, `familiarity --set`,
 `training-history --max` and `prizes` with an amount to change write to the game. Unlike the app, the probe writes to a build without a profile too, as far as the checks allow, so
 that a new build can be mapped.
 - `set` changes one field after the checks above. Values are as stored:
   attributes run 0–100, or 1–20 with `--shown`.
-- `move` moves a player to a club's senior team; `release` leaves him a free agent.
+- `move` moves a player to a club's senior team; `release` leaves him a free agent, and `staff-release` a member of
+  staff without a club.
 - With `--restore`, each one puts the old values back straight away, to test
-  without changing the save. `set`, `move`, `release`, `heal`, `bans`, the `tie`
+  without changing the save. `set`, `move`, `release`, `staff-release`, `heal`, `bans`, the `tie`
   commands, `captain`, `cohesion`, `familiarity`, `training-history` and `prizes` also take `--hold <seconds>` to
   wait first, so the
   change can be looked at in the game. The Dynamics page shows a team's cohesion as the game last

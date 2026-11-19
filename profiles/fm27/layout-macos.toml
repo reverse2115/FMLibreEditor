@@ -423,6 +423,7 @@ reputation = 0xA8         # Tottenham: 7650
 # at youth and reserve teams (Arsenal's David Horseman, under-21s), at six senior teams a chairperson, owner, president
 # or director of football who runs it; null at 21,559 senior teams. A team takes 0xB8 bytes, the next one after it.
 manager = 0x80
+competition = 0x50        # Tottenham: the Premier League; Aston Villa, relegated: the Championship (see layout.toml)
 
 # The game brings its own allocator to macOS: it carves the chunks it gets from malloc into
 # blocks of the same size classes as on Windows (blocks of 8 bytes too, which malloc never
@@ -460,6 +461,7 @@ scouting_staff = 0x90
 # football (job 10) at his own club (Pablo Longoria, River Plate; Marc Wilmots, Standard de Liège); at 14 more one of
 # its own staff with another job who does that one too (seven managers, three directors).
 director_of_football = 0x148
+nation = 0xE8             # Cardiff City: Wales (they play in England, which 0xD8 names); see layout.toml
 
 # Stadiums are laid out as on Windows: Old Trafford reads 74,879, 74,310 in use, room to grow to 95,285; the
 # Emirates 60,704, the Tottenham Hotspur Stadium 62,850, the Amex 31,876.
@@ -471,6 +473,21 @@ seating = 0x80
 used = 0x84
 expansion = 0x8C
 owner = 0x90
+
+# A club's sponsorship deals (#114): the club points at a (begin, end, capacity) record whose list holds a pointer per
+# deal, each to an entry of 24 bytes. Read on Windows (Steam build 26340721) on VfB Stuttgart, whose 9 entries are the 9
+# deals of its Sponsorship screen with every amount and end date, and on a Serie BKT club on the Mac (Steam build
+# 26385295), whose deals on the screen match the entries' amounts at the save's rate.
+[sponsorship]
+club_list = 0x130         # in the club: pointer to the record of the list
+entry_size = 24
+start = 0x00              # u16 day of the year (with flags above bit 8), u16 year
+end = 0x04                # the same
+total = 0x08              # u32 pounds, for the whole deal
+per_season = 0x0C         # u32 pounds
+percent = 0x10            # u16: the amount falls by this much on relegation; a kit manufacturer's rises on promotion
+reputation = 0x12         # u16, the club's reputation when the deal was signed
+kind = 0x14               # u8, named as the game's screen does in sponsorship.rs
 
 [club_info]
 season_tickets = 0xC0
@@ -510,6 +527,7 @@ nation = 0x20
 uid = 0x0C
 name = 0x40
 short_name = 0x48
+nation = 0x60             # the Premier League: England (see layout.toml)
 
 [prize_money]
 stage = "sicomps::LEAGUE_STAGE"
@@ -523,3 +541,17 @@ win = 0x148
 win_again = 0x14C
 draw = 0x150
 loss = 0x154
+
+# A nation's national teams (#169, docs/recon/fm27-national-teams.md), read on the Mac (Steam build 26385295, Apple
+# silicon, a save of 14 September 2026). Each nation has two containers (`db::NATIONAL_TEAM_CONTAINER`), one for its
+# men's teams and one for its women's: 251 of each, 502 in all. A container holds its teams as (begin, end, capacity)
+# of pointers, the senior team first; they are laid out as a club's team ([team]), with the container where a club's
+# team points at its club. The nation (`db::NATION`, [nation]) points at its two containers.
+[national]
+container_uid = 0x0C          # Italia's men's: 776, the nation's UID; the women's have a UID of their own
+container_teams = 0x18        # Italia's men's: 23 players in the senior team, a manager, a reputation of 8500
+container_women = 0xB9        # u8: 0 at all 251 men's containers, 1 at all 251 women's
+container_nation = 0x170      # pointer back to its nation, at all 502
+nation_code = 0x28            # an FM string: "ITA"
+nation_men = 0x110
+nation_women = 0x118

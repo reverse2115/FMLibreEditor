@@ -396,6 +396,8 @@ const errors: ErrorTexts = {
   "app.dataChanged": () => `이 데이터가 게임에서 바뀌었습니다. ${reload}.`,
   "app.noChange": (p) => `변경 사항 ${p.id}번이 없습니다.`,
   "app.alreadyUndone": () => "이 변경 사항은 이미 되돌렸습니다.",
+  "app.historyOnly": () => "이 변경은 앱이 마지막으로 연결되기 전에 했으며, 되돌리려면 당시의 게임 메모리가 필요했습니다. 직접 원래대로 바꿔 주세요.",
+  "app.history": (p) => `기록을 지우지 못했습니다: ${p.reason}`,
   "export.failed": (p) => `파일을 쓸 수 없습니다: ${p.reason}`,
   "export.notAllowed": (p) =>
     `FMLibreEditor가 ${p.folder}에 쓸 수 없습니다. macOS가 문서 폴더 사용 여부를 물었다면 시스템 설정 › 개인정보 보호 및 ` +
@@ -652,6 +654,9 @@ export const ko: Strings = {
     "stadium.seating": "좌석 수",
     "stadium.used": "사용 중인 수용 인원",
     "stadium.expansion": "확장 용량",
+    "prize.win": "리그 상금(승리당)",
+    "prize.draw": "리그 상금(무승부당)",
+    "prize.loss": "리그 상금(패배당)",
   },
 
   profile: {
@@ -1034,8 +1039,9 @@ export const ko: Strings = {
     reputationTitle: "명성",
 
     tabsLabel: "구단 섹션",
-    tabs: { overview: "개요", squad: "선수단", stadium: "경기장" },
+    tabs: { overview: "개요", squad: "선수단", staff: "스태프", stadium: "경기장" },
     squadLocked: "선수단을 열려면 편집을 마치세요",
+    staffLocked: "스태프를 열려면 편집을 마치세요",
 
     facilities: "시설",
 
@@ -1093,6 +1099,79 @@ export const ko: Strings = {
     socialMedia: "소셜 미디어 팔로워",
   },
 
+  clubStaff: {
+    loading: "스태프를 읽는 중…",
+    empty: "게임이 이 구단의 스태프를 두지 않습니다. 이 세이브에서 플레이하지 않는 리그의 구단에는 스태프가 없습니다.",
+    count: (total, staying) =>
+      staying === 0 ? `스태프 ${format(total)}명` : `스태프 ${format(total)}명 · 나머지를 방출해도 ${format(staying)}명은 남습니다`,
+
+    actionsLabel: "스태프 전체에 대한 작업",
+    releaseAll: (count) => (count === 0 ? "스태프 전원 방출" : `스태프 전원 방출 (${format(count)}명)`),
+    releaseAllTitle: "나와 이사진을 뺀 구단의 모든 스태프를 한 번에 방출합니다. 먼저 확인 창이 열립니다",
+    releaseNone: "이 구단에는 방출할 수 있는 스태프가 없습니다",
+    hint: "나와 이사진을 뺀 모두가 곧바로 구단을 떠납니다. 변경 내역 화면에서도 되돌릴 수 있습니다.",
+    released: (count) => `스태프 ${format(count)}명을 방출했습니다`,
+    refused: (name, reason) => `${name}: ${reason}`,
+    undo: "되돌리기",
+    undoTitle: "방출한 스태프를 같은 계약으로 구단에 되돌립니다",
+
+    tableLabel: "구단 스태프",
+    staysColumn: "잔류",
+    stays: {
+      you: "나",
+      board: "이사진",
+      player: "선수 겸직",
+      held: "구단이 따로 보유",
+      other: "방출할 수 없음",
+    },
+
+    title: "스태프 전원 방출",
+    from: "구단",
+    leaving: (count) => `${format(count)}명이 구단을 떠납니다`,
+    staying: (count) => `${format(count)}명이 남습니다`,
+    more: (count) => `외 ${format(count)}명`,
+    doesHeading: "바뀌는 것",
+    does: [
+      "각자 곧바로 구단 스태프에서 빠지고 계약이 끝나, 게임의 소속 구단 없는 스태프처럼 무직이 됩니다",
+      "누구에게도 돈이 지급되지 않습니다",
+      "감독이나 풋볼 디렉터 자리는 비워 두어 구단이 채우게 합니다",
+      "나, 이사진, 에디터가 방출할 수 없는 사람은 남습니다",
+      "변경 내역에 기록되며, 되돌리기 한 번으로 모두 같은 계약으로 돌아옵니다",
+    ],
+    dialogHint: "'전원 방출'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
+    release: "전원 방출",
+    releasing: "방출하는 중…",
+    cancel: "취소",
+
+    moveAll: "스태프 전원 이적",
+    moveAllTitle: "나와 이사진을 뺀 구단의 모든 스태프를 한 번에 다른 구단으로 이적시킵니다. 먼저 확인 창이 열립니다",
+    moveNone: "이 구단에는 이적시킬 수 있는 스태프가 없습니다",
+    moved: (count, club) => `스태프 ${format(count)}명이 ${club}에 합류했습니다`,
+    undoMoveTitle: "이적한 스태프를 같은 계약으로 이 구단에 되돌립니다",
+    moveTitle: "스태프 전원 이적",
+    moveSearch: "스태프가 이적할 구단 검색",
+    movePick: "스태프가 이적할 구단을 선택하세요.",
+    movePlanning: "이적할 수 있는 사람을 확인하는 중…",
+    movePlan: (count, club) => `${club}에 스태프 ${format(count)}명이 합류합니다`,
+    moveNobody: (club) => `이 구단의 스태프 중 ${club}에 합류할 수 있는 사람이 없습니다.`,
+    moveStays: {
+      managerTaken: (club) => `${club}에 이미 감독이 있습니다`,
+      directorTaken: (club) => `${club}에 이미 풋볼 디렉터가 있습니다`,
+      yourClub: (club) => `내가 ${club} 구단을 맡고 있습니다`,
+      other: "이적시킬 수 없음",
+    },
+    moveDoes: [
+      "각자 새 구단에서 직책에 맞는 곳에 합류합니다. 의료진, 코치진, 스카우트진 중 하나입니다",
+      "직책, 주급, 계약 만료일은 그대로이며, 각 계약 시작일은 게임 내 날짜가 됩니다",
+      "감독이나 풋볼 디렉터는 새 구단의 그 자리가 비어 있을 때만 합류하며, 이쪽에서 빈 자리는 비워 두어 구단이 채우게 합니다",
+      "나, 이사진, 에디터가 이적시킬 수 없는 사람은 남습니다",
+      "변경 내역에 기록되며, 되돌리기 한 번으로 모두 이 구단으로 돌아옵니다",
+    ],
+    moveHint: "'전원 이적'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
+    move: "전원 이적",
+    moving: "이적하는 중…",
+  },
+
   clubList: {
     nav: "구단",
     count: (total) => entityCount("club", total),
@@ -1110,6 +1189,8 @@ export const ko: Strings = {
     women: "여자",
     columns: {
       name: "이름",
+      nation: "국가",
+      league: "리그",
       reputation: "명성",
       founded: "창단",
       uid: "UID",
@@ -1119,9 +1200,124 @@ export const ko: Strings = {
       all: "모든 구단",
       men: "남자 구단",
       women: "여자 구단",
+      nation: "국가",
+      league: "리그",
+      anyLeague: "모든 리그",
+      leagueTitle: "1군이 이번 시즌에 뛰는 리그",
+      reputation: "명성",
+      reputationTitle: "게임에 저장된 값으로 0~10,000",
+      minReputation: "최저 명성",
+      maxReputation: "최고 명성",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "국가대표",
+    switchLabel: "구단 또는 국가대표",
+    search: "이름, 코드 또는 UID로 국가대표 검색",
+    summary: (total, shown) =>
+      total > shown ? `국가대표: ${format(total)} · 명성 상위 ${shown}개 표시` : `국가대표: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "이 필터에 맞는 국가대표가 없습니다." : "국가대표를 찾지 못했습니다.";
+      }
+      return filtered ? `이 필터에서 “${query}”에 맞는 국가대표가 없습니다.` : `“${query}”에 맞는 국가대표가 없습니다.`;
+    },
+    /** The small tag on a women's team. */
+    women: "여자",
+    columns: {
+      name: "국가",
+      code: "코드",
+      reputation: "명성",
+      players: "선수",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "표시할 팀",
+      all: "모든 팀",
+      men: "남자 팀",
+      women: "여자 팀",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "여자 국가대표팀",
+    mensTeam: "남자 국가대표팀",
+    reputationShort: "명성",
+    reputationTitle: "1군의 명성, 0~10,000",
+    teamKinds: { 0: "1군", 9: "U-23", 10: "U-21", 18: "U-20", 11: "U-19", 12: "U-18" },
+    teamType: (kind) => `유형 ${kind}`,
+    teamsLabel: "이 나라의 팀",
+    teamReputation: (team) => `명성 (${team})`,
+    teamReputationTitle: "이 팀의 명성, 0~10,000",
+    squadHeading: (team, count) => `${team}: 선수 ${format(count)}명`,
+    squadLabel: (team) => `대표팀 선수: ${team}`,
+    squadNote: "게임이 이 팀에 올려 둔 선수를 게임의 순서대로 보여 줍니다. 소집, 주장, 감독 계약은 여기서 편집하지 않습니다.",
+    actionsHint: "작업은 1군에 올라 있는 모든 선수에게 적용됩니다. 변경 내역 화면에서도 되돌릴 수 있습니다.",
+    noTeams: "게임에 이 대표팀의 팀이 없어서 보여 줄 선수단이나 명성이 없습니다.",
+    reading: "선수단을 읽는 중…",
+    noPlayers: "게임이 이 팀에 올려 둔 선수가 없습니다.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "이 게임 버전에서는 국가대표를 쓸 수 없습니다",
+    unavailableBuild: "이 게임 버전이 국가대표를 어디에 두는지 아직 아무도 찾지 못해서, 에디터는 엉뚱한 메모리를 읽는 대신 아무것도 보여 주지 않습니다.",
+    unavailableUnreadable: "에디터가 이 게임 버전에서 국가대표가 있을 것으로 예상한 곳을 살펴봤지만, 찾은 것이 게임의 데이터로 읽히지 않아 아무것도 보여 주지 않습니다.",
+  },
 
+  leaguePrizes: {
+    title: "리그 상금",
+    league: (league) => `${league}이(가) 이번 시즌 지급하는 금액`,
+    reading: "게임에서 리그 상금을 읽는 중… 처음에는 30초 이상 걸릴 수 있습니다.",
+    readAgain: "다시 읽기",
+    readAgainTitle: "게임에서 금액을 다시 읽습니다. 그 사이 시작된 단계도 상금을 지급할 수 있습니다",
+    paysNothing: "이 클럽의 리그는 이번 시즌 최종 순위별로도 경기당으로도 상금을 지급하지 않습니다.",
+    stageStarted: "진행 중인 단계",
+    stageFuture: "아직 시작하지 않은 단계",
+    alike: (count) => `${format(count)}개 조 또는 단계에서 같은 금액`,
+    byPosition: "최종 순위별",
+    place: (place) => `${format(place)}위`,
+    perMatch: "경기당",
+    win: "승리당",
+    draw: "무승부당",
+    loss: "패배당",
+    noList: "최종 순위별 상금이 없습니다.",
+    noPerMatch: "경기당 상금이 없습니다.",
+    note: "결승 승자와 패자 같은 토너먼트 라운드의 상금과 대회 참가 수당은 아직 읽지 않습니다.",
+    unavailableBuild: "이 버전의 게임이 상금을 어디에 보관하는지 아직 아무도 확인하지 않았습니다. 잘못된 메모리를 읽지 않도록 에디터는 아무것도 표시하지 않습니다.",
+    unavailableUnreadable: "에디터가 이 버전의 게임에서 상금이 있어야 할 곳을 찾았지만, 찾은 내용이 게임의 것으로 읽히지 않아 아무것도 표시하지 않습니다.",
+    edit: "금액 변경",
+    editTitle: "리그의 이 단계가 지급하는 금액을 참가하는 모든 클럽에 대해 변경합니다",
+    save: "금액 저장",
+    saving: "저장 중…",
+    cancel: "취소",
+    everyClub: (league) =>
+      `${league}이(가) 참가하는 모든 클럽에 지급하는 금액이 바뀝니다. 이 클럽만이 아닙니다. 게임은 이를 저장 파일에 보관하지만 이번 시즌뿐입니다. 다음 시즌은 게임 자체의 금액으로 다시 설정합니다. 변경 내역의 되돌리기로 이전 금액을 되돌릴 수 있습니다.`,
+    infoLabel: "상금 변경이 유지되는 기간",
+    invalid: (most) => `0부터 ${most}까지의 정수 금액을 입력하세요.`,
+    allNothing: "아무것도 지급하지 않는 단계는 더 이상 표시되지 않습니다. 최소 한 금액은 0보다 크게 두세요.",
+    placeField: (place) => `리그 상금(${format(place)}위)`,
+    changedIn: (league, groups) =>
+      groups > 1 ? `${league}의 모든 클럽, ${format(groups)}개 조` : `${league}의 모든 클럽`,
+  },
+
+  sponsorships: {
+    title: "스폰서 계약",
+    reading: "구단의 스폰서 계약을 읽는 중…",
+    none: "이 구단에는 스폰서 계약이 없습니다.",
+    perSeason: "시즌당",
+    total: "총액",
+    term: "기간",
+    years: (count) => `${format(count)}년`,
+    unnamed: (kind) => `유형 ${format(kind)}`,
+    unnamedTitle: "이 계약 유형은 아직 게임 화면의 이름과 맞춰 보지 않았으며, 화면에 표시되지 않을 수도 있습니다.",
+    ended: "종료",
+    endedTitle: "게임 날짜 이전에 종료된 계약입니다. 게임의 스폰서 화면에는 더 이상 표시되지 않습니다.",
+    falls: (percent) => `강등 시 ${format(percent)}% 감소`,
+    rises: (percent) => `1부 리그 승격 시 ${format(percent)}% 증가`,
+    note: "읽기 전용입니다. 게임이 각 계약에 대해 보관하는 금액입니다. 게임의 스폰서 화면에는 종료되지 않은 계약이 표시됩니다.",
+    unavailableBuild: "이 게임 버전이 스폰서 계약을 어디에 보관하는지 아직 확인되지 않아, 엉뚱한 메모리를 읽지 않도록 표시하지 않습니다.",
+    unavailableUnreadable: "편집기는 이 게임 버전에서 예상되는 위치에서 스폰서 계약을 찾았지만, 찾은 내용이 게임의 데이터로 읽히지 않아 표시하지 않습니다.",
+  },
   app: {
     stage: "베타",
     settingsLabel: "설정",
@@ -1233,7 +1429,6 @@ export const ko: Strings = {
     unknownBuildText:
       "게임이 업데이트된 것으로 보입니다. FMLibreEditor가 게임 데이터를 찾아 검사했지만, 테스트하지 않은 버전에는 " +
       "허용하기 전까지 쓰지 않습니다. 보통 며칠 안에 새 FMLibreEditor가 나옵니다.",
-    allowedText: "이번 세션에서는 검사가 허용하는 범위에서 편집할 수 있습니다. 세이브 백업을 유지하세요.",
     failedTitle: "게임 데이터 일부가 검사를 통과하지 못했습니다",
     reloadHint: "세이브를 불러오는 중이었다면 '데이터 다시 불러오기'로 다시 검사할 수 있습니다.",
     noDate: "게임 내 날짜가 검사를 통과하지 못해 나이를 표시하지 않습니다.",
@@ -1327,8 +1522,31 @@ export const ko: Strings = {
 
   changes: {
     nav: "변경 내역",
-    title: "이번 세션의 변경 내역",
-    hint: "최근 것부터 표시합니다. 변경은 게임에 기록한 값이 그대로 남아 있을 때만 되돌릴 수 있습니다.",
+    title: "변경 내역",
+    hint:
+      "최근 것부터 표시합니다. 앱은 커리어별로 변경 내역을 보관하므로 다시 시작해도 목록에 나타납니다. 변경은 게임에 기록한 값이 그대로 남아 있을 때만 되돌릴 수 있습니다.",
+    /** Under the hint, when the list holds changes from earlier sessions: how many, and how many of them the game did not hold. */
+    earlierNote: (count, missing) =>
+      `이전 세션의 ${changeCount(count)}` + (missing > 0 ? `, 그중 ${format(missing)}건은 데이터를 읽을 때 게임에 없었습니다` : "") + ". 이적, 치료, 연결, 조항, 이름 변경은 되돌리기 없이 기록으로만 남습니다.",
+    /** The small tag after the name of an earlier change, and its hover text. */
+    earlierTag: "이전",
+    earlierTitle: "앱이 마지막으로 연결되기 전에 기록되었으며, 이 커리어의 기록에 보관됩니다",
+    /** Under the status of an earlier change: whether the game held its value when the data was last read. */
+    inGame: "게임에 있음",
+    inGameTitle: "데이터를 마지막으로 읽었을 때 게임에 이 값이 있었습니다",
+    notInGame: "게임에 없음",
+    notInGameTitle: "데이터를 마지막으로 읽었을 때 게임에 이 값이 없었습니다. 변경 후 게임을 저장하지 않았거나, 그 뒤 게임이 값을 바꾼 것입니다",
+    /** In the place of Undo for an earlier change that cannot be undone from here, and its hover text. */
+    historyOnly: "기록",
+    historyOnlyTitle: "앱이 마지막으로 연결되기 전에 한 변경입니다. 되돌리려면 당시의 게임 메모리가 필요했습니다",
+    /** Under a mass edit: how many of its earlier changes the game did not hold. */
+    batchNotInGame: (count) => `${format(count)}건 게임에 없음`,
+    /** Empties the list and the history of the career; the question that asks first, and its two answers. */
+    clearHistory: "기록 지우기",
+    clearHistoryTitle: "이 목록을 비우고 이 커리어의 기록을 잊습니다. 변경 사항은 게임에 남습니다.",
+    confirmClear: "이 커리어의 기록을 지울까요? 변경 사항은 게임에 남지만, 더 이상 여기서 되돌릴 수 없습니다.",
+    keepHistory: "유지",
+    clearConfirm: "지우기",
     continueHint: "변경은 게임이 한 번 진행된 뒤에 게임에 표시됩니다. 게임에서 '진행하기'를 누르세요.",
     swappedWith: (name) => `${name}와(과) 맞교환`,
     released: (name) => `${name} 방출됨`,
@@ -1350,7 +1568,7 @@ export const ko: Strings = {
       change: "변경",
       status: "상태",
     },
-    kinds: { player: "선수", staff: "스태프", club: "구단" },
+    kinds: { player: "선수", staff: "스태프", club: "구단", nationalTeam: "국가대표" },
     stored: (change) => `저장된 값 ${change}`,
     undone: (time) => `${time}에 되돌림`,
     undo: "되돌리기",
@@ -1371,6 +1589,28 @@ export const ko: Strings = {
     previous: "이전",
     next: "다음",
     range: (first, last, total) => `${format(total)}건 중 ${format(first)}–${format(last)}`,
+
+    // Search and filters
+    /** The search box: what it looks through. Its name for assistive technology is the same. */
+    searchPlaceholder: "이름, UID, 항목, 구단으로 변경 사항 검색",
+    /** The name of the three buttons that choose which sessions' changes are listed, for assistive technology. */
+    sessionGroup: "세션",
+    sessions: { all: "전체", this: "이번 세션", earlier: "이전 세션" },
+    /** The check boxes: only changes still in place, and only earlier ones the game did not hold; their hover text. */
+    notUndone: "되돌리지 않음",
+    notUndoneTitle: "아직 적용 중인 변경 사항만",
+    notInGameFilterTitle: "데이터를 마지막으로 읽었을 때 게임에 없던 이전 변경 사항만",
+    /** Takes the search text and every choice away. */
+    clearFilter: "필터 해제",
+    /** The line beside the title while a search or a filter is on: `matching` of the `total` changes, `undone` of those undone. */
+    filteredCount: (matching, total, undone) => {
+      const count = `${changes(total)} 중 ${format(matching)}건`;
+      return undone === 0 ? count : `${count} · ${format(undone)}건 되돌림`;
+    },
+    /** Under a mass edit while a search or a filter is on: how many of its changes they leave. */
+    batchMatching: (matching, total) => `${format(total)}건 중 ${format(matching)}건 일치`,
+    /** In the place of the list when the search and the filters leave no change. */
+    noMatches: "검색과 필터에 맞는 변경 사항이 없습니다.",
   },
 
   export: {
@@ -1409,7 +1649,7 @@ export const ko: Strings = {
         "각 스태프의 직책과 소속 구단, 능력, 1–20 기준의 능력치, 성격, 명성, 계약(급여와 날짜)을 게임 내 날짜와 함께 " +
         "담습니다. 금액은 게임이 보관하는 대로 파운드입니다. 게임은 아무것도 바뀌지 않습니다.",
       club:
-        "각 구단의 명성, 창단 연도, 시즌권, 소셜 미디어 팔로워, 서포터 구성과 성향, 시설, 경기장, 재정(보유 금액, 이적 " +
+        "각 구단의 국가, 리그, 명성, 창단 연도, 시즌권, 소셜 미디어 팔로워, 서포터 구성과 성향, 시설, 경기장, 재정(보유 금액, 이적 " +
         "예산, 주간 급료 지출과 급료 예산, 입장권 가격)을 게임 내 날짜와 함께 담습니다. FM은 플레이 중인 리그의 구단에 " +
         "대해서만 재정을 보관합니다. 금액은 게임이 보관하는 대로 파운드입니다. 게임은 아무것도 바뀌지 않습니다.",
     },
@@ -1423,6 +1663,24 @@ export const ko: Strings = {
     show: "폴더에서 보기",
     showTitle: "파일이 있는 폴더에서 파일을 표시합니다",
     close: "닫기",
+
+    /** The export of the Changes view: a CSV file of the changes its search and filters show. */
+    changes: {
+      buttonTitle: "목록에 표시된 변경 사항을 스프레드시트나 스크립트에서 쓸 CSV 파일로 저장합니다",
+      title: "변경 사항 내보내기",
+      /** What the export covers: everything the list's search and filters select, or, with none on, the whole history. */
+      scope: (count, filtering) =>
+        count === 0
+          ? "검색과 필터에 맞는 변경 사항이 없습니다."
+          : filtering
+            ? `${changes(count)}: 검색과 필터로 선택된 항목을 최신순으로 내보냅니다.`
+            : `${changes(count)}: 이 커리어의 전체 기록을 최신순으로 내보냅니다.`,
+      contents:
+        "각 변경 사항의 시각(현지 시간, UTC와의 차이 포함), 이름과 UID, 항목, 게임이 저장하는 형태와 여기에 표시되는 " +
+        "형태의 이전 값과 새 값, 목록이 아래에 보여 주는 설명, 속해 있던 일괄 편집, 되돌린 시각, 이전 세션의 " +
+        "변경인지와 게임에 있는지 여부가 담깁니다. 게임에는 아무것도 바뀌지 않습니다.",
+      done: (count, file) => `${changes(count)}을 ${file}에 내보냈습니다`,
+    },
   },
 
   massEdit: {
@@ -1803,11 +2061,13 @@ export const ko: Strings = {
   release: {
     button: "방출",
     buttonTitle: "게임에서 이 선수를 소속 구단에서 방출합니다. 자유 계약 선수가 됩니다",
+    staffButtonTitle: "게임에서 이 스태프를 소속 구단에서 방출합니다. 소속 구단이 없어집니다",
 
     title: "방출",
     from: "떠나는 구단",
     checking: "방출을 확인하는 중…",
     ready: (club) => `${club} → 자유 계약`,
+    staffReady: (club) => `${club} → 무직`,
     doesHeading: "방출로 바뀌는 것",
     does: [
       "구단의 모든 팀에서 빠지고 계약이 끝나, 어느 구단이든 영입할 수 있는 자유 계약 선수가 됩니다",
@@ -1815,6 +2075,12 @@ export const ko: Strings = {
       "구단에서 맡던 주장직은 비워 둡니다",
       "게임의 이적 기록에는 표시되지 않습니다",
       "변경 내역에 기록되며, 되돌리기 한 번으로 선수가 같은 계약으로 돌아옵니다",
+    ],
+    staffDoes: [
+      "곧바로 구단 스태프에서 빠지고 계약이 끝나, 게임의 소속 구단 없는 스태프처럼 무직이 됩니다",
+      "누구에게도 돈이 지급되지 않습니다",
+      "감독이나 풋볼 디렉터 자리는 비워 두어 구단이 채우게 합니다",
+      "변경 내역에 기록되며, 되돌리기 한 번으로 같은 계약으로 돌아옵니다",
     ],
 
     hint: "'방출'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
@@ -2663,6 +2929,77 @@ export const ko: Strings = {
       none: "없음",
       more: (count: number) => `외 ${format(count)}명`,
     },
+  },
+
+  /** What's new: what a version brings (see en.ts). */
+  whatsNew: {
+    title: (version: string) => `${version} 버전의 새 기능`,
+    updated: "FMLibreEditor가 업데이트되었습니다.",
+    version: (version: string) => `${version} 버전`,
+    thanks: (names: string) => `${names} 님께 감사드립니다.`,
+    allChanges: "모든 변경 사항",
+    allChangesTitle: "이 버전의 전체 노트를 GitHub에서 열기",
+    close: "확인",
+    link: "새 기능",
+    command: "이 버전의 새 기능",
+    versions: {
+      "0.5.3": [
+        {
+          title: "FM27의 11월 17일 업데이트.",
+          text: "Windows와 macOS에서 Game Pass 0.9.2524.0과 Steam 빌드 26620374를 지원합니다. 업데이트로 위치가 바뀐 구단 재정과 팀이 쓰는 전술을 다시 읽습니다.",
+        },
+        {
+          title: "국가대표.",
+          text: "구단 목록 위의 전환 버튼으로 모든 나라의 남자·여자 국가대표를 볼 수 있습니다. 팀의 선수단, 유소년 팀(U-21, U-20 등)과 그 선수단, 각 팀의 명성을 보여 주며 명성은 편집할 수 있습니다.",
+        },
+        {
+          title: "리그 상금.",
+          text: "구단 개요에 소속 리그가 이번 시즌 최종 순위별·경기당 지급하는 상금을 보여 주며, 금액은 시즌이 끝날 때까지 리그의 모든 구단에 대해 바꿀 수 있습니다.",
+        },
+        {
+          title: "수정.",
+          text: "유소년 선수가 2020년 이후 출생한 세이브도 이제 편집기가 쓰기 전에 하는 검사를 통과합니다.",
+        },
+      ],
+      "0.5.2": [
+        {
+          title: "내 구단.",
+          text: "앱이 지휘하는 구단 화면으로 열립니다. 살펴봐야 할 선수, 구단 자금, 선수단 작업을 한곳에 모았습니다. 내 구단이 없으면 구단 하나를 팔로우할 수 있습니다.",
+        },
+        {
+          title: "명령 팔레트.",
+          text: "Ctrl+K(Mac에서는 ⌘K)로 선수, 스태프, 구단, 명령을 찾을 수 있고, 단축키로 탭 사이를 이동할 수 있습니다.",
+        },
+        {
+          title: "스카우트.",
+          text: "시장의 기회, 내보낼 선수와 비슷한 선수, 같은 포지션의 1번 선수와의 비교, 이미지나 PDF로 저장하는 스카우트 보고서, 경기장 위의 선수단, 유소년 입단.",
+        },
+        {
+          title: "선수 이름 변경.",
+          text: "이름, 성, 호칭, 전체 이름을 바꿀 수 있습니다. 게임이 새 이름을 세이브에 보관합니다.",
+        },
+        {
+          title: "계약과 스태프.",
+          text: "클릭 한 번으로 계약을 5년 연장하거나, 일괄 편집으로 여러 선수에게 연수를 더할 수 있습니다. 스태프 한 명 또는 구단의 전체 스태프를 방출해도 되돌리기 한 번으로 복구됩니다.",
+        },
+        {
+          title: "전술 최대.",
+          text: "구단의 선수단 탭에서 팀의 전술 숙련도를 최대로 올립니다. 불만 사유도 이제 게임이 쓰는 표현 그대로 표시됩니다.",
+        },
+        {
+          title: "변경 내용 보관.",
+          text: "각 커리어의 변경 내용이 재시작 후에도 변경 내역 탭에 남고, 검색, 필터, 내보내기를 할 수 있습니다.",
+        },
+        {
+          title: "구단 필터.",
+          text: "국가, 리그, 명성. 일괄 편집과 내보내기는 목록에 표시된 구단을 대상으로 합니다.",
+        },
+        {
+          title: "러시아어와 일본어.",
+          text: "언어가 두 개 더 늘었습니다. 11월 12일 Steam 업데이트도 이제 지원하는 빌드입니다.",
+        },
+      ],
+    } as Record<string, { title: string; text: string }[]>,
   },
 
   errors,

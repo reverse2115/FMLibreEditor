@@ -467,6 +467,12 @@ reputation = 0xA8         # u16, 0..10000; the club's reputation lives on its se
 # (Parma, Exeter City), as the game leaves a club between two managers. A team takes 0xB8 bytes, one after another
 # in memory, so what lies 0xB8 on is the next team's.
 manager = 0x80
+# The league the team plays in this season: a competition pointer, null for none (a senior team outside the leagues,
+# or a club the game holds only for its history). Read on the Mac (Steam build 26577676, 14 July 2027), whose team
+# layout is the same: 22,908 of 23,606 clubs' senior teams point at one of 2,197 competitions. The Premier League holds
+# Tottenham; Aston Villa, relegated, are in the Championship, and Derby County, promoted, in the Premier League. 0x60
+# holds the league of the season before (the Premier League for Aston Villa, the Championship for Derby).
+competition = 0x50
 
 # The game's allocator hands out blocks in size classes, without headers. Measured on
 # the buffers of the teams' player lists (probe `squads`): a list of n pointers sits in
@@ -513,6 +519,12 @@ scouting_staff = 0x90     # scouts, the chief scout, recruitment analysts, loan 
 # director of football (job 10), at his own club; at 34 more a manager, director or president who does that job too.
 # A director of football is in none of the department lists (350 of 362), so this is how his club holds him.
 director_of_football = 0x148
+# The nation the club is from, as its profile in the game names it: a nation pointer. Read on the Mac (Steam build
+# 26577676, a save of 14 July 2027), whose club layout is the same, over all 23,606 clubs: Tottenham Hotspur, England;
+# Cardiff City, Swansea City and Wrexham, Wales; Derry City, Northern Ireland; FC Vaduz, Liechtenstein; Toronto FC,
+# Canada. Each of those plays in another nation's leagues, which 0xD8 names (England, the Republic of Ireland,
+# Switzerland, the United States); every other club has the same nation at both.
+nation = 0xE8
 
 # A club's stadium (db::STADIUM, 0xC0 bytes), which its senior team points at. Read on the Game Pass build with
 # Manchester United's Old Trafford: capacity 74,879, all of it seated, 74,310 in use, room to grow to 95,285; and
@@ -526,6 +538,21 @@ seating = 0x80            # u32, seats; never above the capacity
 used = 0x84               # u32, the capacity in use when it is limited (Old Trafford 74,310); 0 when it is not
 expansion = 0x8C          # u32, the most it can be expanded to
 owner = 0x90              # pointer to the club that owns it
+
+# A club's sponsorship deals (#114): the club points at a (begin, end, capacity) record whose list holds a pointer per
+# deal, each to an entry of 24 bytes. Read on Windows (Steam build 26340721) on VfB Stuttgart, whose 9 entries are the 9
+# deals of its Sponsorship screen with every amount and end date, and on a Serie BKT club on the Mac (Steam build
+# 26385295), whose deals on the screen match the entries' amounts at the save's rate.
+[sponsorship]
+club_list = 0x130         # in the club: pointer to the record of the list
+entry_size = 24
+start = 0x00              # u16 day of the year (with flags above bit 8), u16 year
+end = 0x04                # the same
+total = 0x08              # u32 pounds, for the whole deal
+per_season = 0x0C         # u32 pounds
+percent = 0x10            # u16: the amount falls by this much on relegation; a kit manufacturer's rises on promotion
+reputation = 0x12         # u16, the club's reputation when the deal was signed
+kind = 0x14               # u8, named as the game's screen does in sponsorship.rs
 
 [club_info]
 season_tickets = 0xC0     # u32
@@ -566,6 +593,9 @@ nation = 0x20             # nation pointer
 uid = 0x0C                # u32
 name = 0x40               # FM string pointer
 short_name = 0x48         # FM string pointer
+# The nation whose competition it is: a nation pointer (England for the Premier League; the United States for Major
+# League Soccer, which Toronto FC plays in). Read on the Mac (Steam build 26577676), whose layout is the same.
+nation = 0x60
 
 # The prize money a competition's stages pay (#123: found by RootTourist on the Windows Steam build, checked by
 # Reckbeg on the Mac against the game's Competition Stages screens). A stage played as a league (a league, a league
@@ -589,3 +619,20 @@ win = 0x148               # u32 pounds per win
 win_again = 0x14C         # u32, the same as `win` in every settings seen
 draw = 0x150              # u32 pounds per draw
 loss = 0x154              # u32 pounds per loss
+
+# A nation's national teams (#169, docs/recon/fm27-national-teams.md), read on Game Pass 0.9.2435.0 (a save of January
+# 2028) and on Steam build 26577676 (a save of October 2026). Each nation has two containers
+# (`db::NATIONAL_TEAM_CONTAINER`, 0x898 bytes apart here, 0x8A0 on the Mac), one for its men's teams and one for its
+# women's: 251 of each, 502 in all. A container holds its teams as (begin, end, capacity) of pointers, the senior team
+# first; they are laid out as a club's team ([team]), with the container where a club's team points at its club. What
+# the editor reads of a container sits where it does on the Mac. The nation (`db::NATION`, [nation], 0x200 bytes apart
+# here and 0x208 on the Mac) keeps everything from its capital (+0xE8 here) on 8 bytes earlier than the Mac does, its
+# two containers too.
+[national]
+container_uid = 0x0C          # Italy's men's: 776, the nation's UID; the women's have a UID of their own (2000169632)
+container_teams = 0x18        # Italy's men's on Game Pass: 7 teams, the senior one first, with 23 players
+container_women = 0xB9        # u8: 0 at all 251 men's containers, 1 at all 251 women's
+container_nation = 0x170      # pointer back to its nation
+nation_code = 0x28            # an FM string: "ITA"
+nation_men = 0x108            # 0x110 on the Mac
+nation_women = 0x110          # 0x118 on the Mac

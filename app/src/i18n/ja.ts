@@ -253,6 +253,8 @@ const errors: ErrorTexts = {
   "app.dataChanged": () => `このデータはゲーム内で変更されました。${reload}。`,
   "app.noChange": (p) => `変更 ${p.id} はありません。`,
   "app.alreadyUndone": () => "この変更はすでに元に戻されています。",
+  "app.historyOnly": () => "この変更はアプリが最後に接続する前に行われ、元に戻すには当時のゲームのメモリが必要でした：手動で元に戻してください。",
+  "app.history": (p) => `履歴を消去できませんでした：${p.reason}`,
   "export.failed": (p) => `ファイルを書き込めませんでした：${p.reason}`,
   "export.notAllowed": (p) =>
     `FMLibreEditor は ${p.folder} に書き込めません。macOS から書類フォルダの使用について確認された場合は、` +
@@ -623,6 +625,9 @@ export const ja: Strings = {
     "stadium.seating": "座席数",
     "stadium.used": "使用中の収容人数",
     "stadium.expansion": "拡張後の収容人数",
+    "prize.win": "リーグの賞金（勝利ごと）",
+    "prize.draw": "リーグの賞金（引き分けごと）",
+    "prize.loss": "リーグの賞金（敗戦ごと）",
   },
 
   profile: {
@@ -1008,8 +1013,9 @@ export const ja: Strings = {
     reputationTitle: "評価",
 
     tabsLabel: "クラブの項目",
-    tabs: { overview: "概要", squad: "スカッド", stadium: "スタジアム" },
+    tabs: { overview: "概要", squad: "スカッド", staff: "スタッフ", stadium: "スタジアム" },
     squadLocked: "スカッドを開くには編集を終了してください",
+    staffLocked: "スタッフを開くには編集を終了してください",
 
     facilities: "施設",
 
@@ -1067,6 +1073,80 @@ export const ja: Strings = {
     socialMedia: "SNSフォロワー",
   },
 
+  clubStaff: {
+    loading: "スタッフを読み込み中…",
+    empty: "ゲームはこのクラブのスタッフを保持していません：このセーブでプレイされていないリーグのクラブにはスタッフがいません。",
+    count: (total: number, staying: number) =>
+      staying === 0 ? `スタッフ${format(total)}人` : `スタッフ${format(total)}人・ほかを解除しても${format(staying)}人は残ります`,
+
+    actionsLabel: "スタッフ全体への操作",
+    releaseAll: (count: number) => (count === 0 ? "全スタッフの契約解除" : `全スタッフの契約解除（${format(count)}人）`),
+    releaseAllTitle: "あなたと役員会を除く、クラブの全スタッフの契約を一度に解除します。先に確認画面が開きます",
+    releaseNone: "このクラブには契約解除できるスタッフがいません",
+    hint: "あなたと役員会以外の全員がすぐにクラブを離れます。元に戻す操作は変更履歴でも行えます。",
+    released: (count: number) => `スタッフ${format(count)}人の契約を解除しました`,
+    refused: (name: string, reason: string) => `${name}：${reason}`,
+    undo: "元に戻す",
+    undoTitle: "契約解除したスタッフを、同じ契約のままクラブに戻します",
+
+    tableLabel: "クラブのスタッフ",
+    staysColumn: "残留",
+    stays: {
+      you: "あなた",
+      board: "役員会",
+      player: "選手でもある",
+      held: "クラブが別の形で保持",
+      other: "解除できません",
+    },
+
+    title: "全スタッフの契約解除",
+    from: "クラブ",
+    leaving: (count: number) => `${format(count)}人がクラブを離れます`,
+    staying: (count: number) => `${format(count)}人が残ります`,
+    more: (count: number) => `ほか${format(count)}人`,
+    doesHeading: "行われること",
+    does: [
+      "各スタッフはすぐにクラブのスタッフから外れ、契約が終了します：ゲーム自身の所属クラブのないスタッフと同じく無職になります",
+      "誰にも何も支払われません",
+      "監督やフットボールディレクターの座は空席となり、クラブが補充します",
+      "あなた、役員会、エディターが解除できない人は残ります",
+      "変更履歴に記録され、1回の取り消しで全員を同じ契約のまま戻せます",
+    ],
+    dialogHint: "「全員解除」を押すまで、ゲーム内では何も変わりません。",
+    release: "全員解除",
+    releasing: "契約解除中…",
+    cancel: "キャンセル",
+
+    moveAll: "全スタッフの移籍",
+    moveAllTitle: "あなたと役員会を除く、クラブの全スタッフを別のクラブへ一度に移籍させます。先に確認画面が開きます",
+    moveNone: "このクラブには移籍できるスタッフがいません",
+    moved: (count: number, club: string) => `スタッフ${format(count)}人が${club}に移籍しました`,
+    undoMoveTitle: "移籍したスタッフを、同じ契約のままこのクラブに戻します",
+    moveTitle: "全スタッフの移籍",
+    moveSearch: "スタッフの移籍先クラブを検索",
+    movePick: "スタッフの移籍先クラブを選んでください。",
+    movePlanning: "移籍できる人を確認中…",
+    movePlan: (count: number, club: string) => `スタッフ${format(count)}人が${club}に移籍します`,
+    moveNobody: (club: string) => `このクラブのスタッフに、${club}へ移籍できる人はいません。`,
+    moveStays: {
+      managerTaken: (club: string) => `${club}にはすでに監督がいます`,
+      directorTaken: (club: string) => `${club}にはすでにフットボールディレクターがいます`,
+      yourClub: (club: string) => `あなたが${club}を率いています`,
+      other: "移籍できません",
+    },
+    moveDoes: [
+      "各スタッフは、新しいクラブのその職がある部門（メディカル・コーチ・スカウト）に加わります",
+      "職、週給、契約満了日は同じで、各契約はゲーム内の日付から始まります",
+      "監督やフットボールディレクターは、新しいクラブのその座が空いている場合だけ加わります。こちらで空いた座は" +
+        "空席のままで、クラブが補充します",
+      "あなた、役員会、エディターが移籍させられない人は残ります",
+      "変更履歴に記録され、1回の取り消しで全員をこのクラブに戻せます",
+    ],
+    moveHint: "「全員移籍」を押すまで、ゲーム内では何も変わりません。",
+    move: "全員移籍",
+    moving: "移籍中…",
+  },
+
   clubList: {
     nav: "クラブ",
     count: (total: number) => `${format(total)}クラブ`,
@@ -1084,6 +1164,8 @@ export const ja: Strings = {
     women: "女子",
     columns: {
       name: "名前",
+      nation: "国",
+      league: "リーグ",
       reputation: "評価",
       founded: "創立",
       uid: "UID",
@@ -1093,9 +1175,124 @@ export const ja: Strings = {
       all: "すべてのクラブ",
       men: "男子クラブ",
       women: "女子クラブ",
+      nation: "国",
+      league: "リーグ",
+      anyLeague: "すべてのリーグ",
+      leagueTitle: "トップチームが今シーズン戦うリーグ",
+      reputation: "評価",
+      reputationTitle: "ゲーム内の値で 0～10,000",
+      minReputation: "評価の下限",
+      maxReputation: "評価の上限",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "代表チーム",
+    switchLabel: "クラブまたは代表チーム",
+    search: "名前、コード、UIDで代表チームを検索",
+    summary: (total: number, shown: number) =>
+      total > shown ? `代表チーム：${format(total)} · 評価の上位${shown}チームを表示` : `代表チーム：${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query: string, filtered: boolean) => {
+      if (query === "") {
+        return filtered ? "このフィルターに一致する代表チームはありません。" : "代表チームが見つかりません。";
+      }
+      return filtered ? `このフィルターで「${query}」に一致する代表チームはありません。` : `「${query}」に一致する代表チームはありません。`;
+    },
+    /** The small tag on a women's team. */
+    women: "女子",
+    columns: {
+      name: "国",
+      code: "コード",
+      reputation: "評価",
+      players: "選手",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "表示するチーム",
+      all: "すべてのチーム",
+      men: "男子代表",
+      women: "女子代表",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "女子代表チーム",
+    mensTeam: "男子代表チーム",
+    reputationShort: "評価",
+    reputationTitle: "トップチームの評価（0〜10,000）",
+    teamKinds: { 0: "トップチーム", 9: "U-23", 10: "U-21", 18: "U-20", 11: "U-19", 12: "U-18" },
+    teamType: (kind: number) => `タイプ ${kind}`,
+    teamsLabel: "この国のチーム",
+    teamReputation: (team: string) => `評価（${team}）`,
+    teamReputationTitle: "このチームの評価（0〜10,000）",
+    squadHeading: (team: string, count: number) => `${team}：${format(count)}人`,
+    squadLabel: (team: string) => `代表チームの選手：${team}`,
+    squadNote: "ゲームがこのチームに載せている選手を、ゲームの順に表示します。招集、キャプテン、監督の契約はここでは編集しません。",
+    actionsHint: "操作はトップチームに載っている全選手が対象です。元に戻す操作は変更履歴でも行えます。",
+    noTeams: "ゲームにはこの代表のチームがないため、表示できる選手や評価はありません。",
+    reading: "選手を読み込み中…",
+    noPlayers: "ゲームはこのチームに選手を載せていません。",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "このバージョンのゲームでは代表チームを利用できません",
+    unavailableBuild: "このバージョンのゲームが代表チームをどこに持っているかはまだ誰も見つけていないため、誤ったメモリを読まないよう、エディターは何も表示しません。",
+    unavailableUnreadable: "エディターはこのバージョンのゲームで代表チームがあるはずの場所を調べましたが、見つかったものがゲームのデータとは読み取れないため、何も表示しません。",
+  },
 
+  leaguePrizes: {
+    title: "リーグの賞金",
+    league: (league) => `${league}が今シーズン支払う額`,
+    reading: "リーグの賞金をゲームから読み込んでいます… 初回は30秒以上かかることがあります。",
+    readAgain: "再読み込み",
+    readAgainTitle: "ゲームから金額を読み込み直します。その後に始まったステージにも賞金があるかもしれません",
+    paysNothing: "このクラブのリーグは今シーズン、最終順位別にも試合ごとにも賞金を支払いません。",
+    stageStarted: "進行中のステージ",
+    stageFuture: "未開始のステージ",
+    alike: (count) => `${format(count)}のグループまたはステージで同じ金額`,
+    byPosition: "最終順位別",
+    place: (place) => `${format(place)}位`,
+    perMatch: "試合ごと",
+    win: "勝利ごと",
+    draw: "引き分けごと",
+    loss: "敗戦ごと",
+    noList: "最終順位による賞金はありません。",
+    noPerMatch: "試合ごとの賞金はありません。",
+    note: "決勝の勝者・敗者などノックアウトラウンドの賞金と大会の参加報酬はまだ読み込みません。",
+    unavailableBuild: "このバージョンのゲームが賞金をどこに保持しているか、まだ誰も確認していません。誤ったメモリを読まないよう、エディターは何も表示しません。",
+    unavailableUnreadable: "エディターはこのバージョンのゲームで賞金があるはずの場所を調べましたが、見つかったものはゲームのものとして読めないため、何も表示しません。",
+    edit: "金額を変更",
+    editTitle: "リーグのこのステージが支払う額を、参加するすべてのクラブについて変更します",
+    save: "金額を保存",
+    saving: "保存中…",
+    cancel: "キャンセル",
+    everyClub: (league) =>
+      `${league}が参加するすべてのクラブに支払う額が変わります（このクラブだけではありません）。ゲームはセーブデータに保持しますが、今シーズンのみです。次のシーズンは自身の金額で設定し直します。変更履歴の「元に戻す」で元の金額に戻せます。`,
+    infoLabel: "賞金の変更が続く期間",
+    invalid: (most) => `0から${most}までの整数の金額を入力してください。`,
+    allNothing: "何も支払わないステージは一覧に表示されなくなります。少なくとも1つの金額を0より大きくしてください。",
+    placeField: (place) => `リーグの賞金（${format(place)}位）`,
+    changedIn: (league, groups) =>
+      groups > 1 ? `${league}のすべてのクラブ（${format(groups)}グループ）` : `${league}のすべてのクラブ`,
+  },
+
+  sponsorships: {
+    title: "スポンサー契約",
+    reading: "クラブのスポンサー契約を読み込み中…",
+    none: "このクラブにはスポンサー契約がありません。",
+    perSeason: "1シーズンあたり",
+    total: "総額",
+    term: "期間",
+    years: (count) => `${format(count)}年`,
+    unnamed: (kind) => `タイプ${format(kind)}`,
+    unnamedTitle: "この種類の契約は、ゲーム画面上の名前とまだ照合されていません。画面に表示されない場合もあります。",
+    ended: "終了",
+    endedTitle: "この契約はゲーム内の日付より前に終了しました。ゲームのスポンサー画面にはもう表示されません。",
+    falls: (percent) => `降格すると${format(percent)}%減額`,
+    rises: (percent) => `トップディビジョンに昇格すると${format(percent)}%増額`,
+    note: "読み取り専用です。ゲームが各契約に保存している金額です。ゲームのスポンサー画面には終了していない契約が表示されます。",
+    unavailableBuild: "このバージョンのゲームがスポンサー契約をどこに保存しているかはまだ確認されていないため、誤ったメモリを読まないよう表示しません。",
+    unavailableUnreadable: "このバージョンのゲームで想定される場所からスポンサー契約を探しましたが、見つかったものがゲームのデータとして読めないため、表示しません。",
+  },
   app: {
     stage: "ベータ",
     settingsLabel: "設定",
@@ -1202,7 +1399,6 @@ export const ja: Strings = {
     unknownBuildText:
       "ゲームがアップデートされた可能性があります。FMLibreEditor はゲームのデータを見つけて検査しましたが、テストされていない" +
       "バージョンには、許可するまで書き込みません。新しい FMLibreEditor は通常、数日以内に公開されます。",
-    allowedText: "検査が許す範囲で、このセッションでの編集を有効にしました。セーブデータのバックアップを取っておいてください。",
     failedTitle: "ゲームのデータの一部が検査に合格しませんでした",
     reloadHint: "セーブの読み込み中だった場合は、「データを再読み込み」で再度検査します。",
     noDate: "ゲーム内の日付が検査に合格しなかったため、年齢は表示されません。",
@@ -1294,8 +1490,31 @@ export const ja: Strings = {
 
   changes: {
     nav: "変更履歴",
-    title: "このセッションの変更",
-    hint: "新しい順。ゲームが書き込んだ値をまだ保持している間だけ、変更を元に戻せます。",
+    title: "変更",
+    hint:
+      "新しい順。アプリはキャリアごとに変更を保存するため、再起動後も一覧に表示されます。ゲームが書き込んだ値をまだ保持している間だけ、変更を元に戻せます。",
+    /** Under the hint, when the list holds changes from earlier sessions: how many, and how many of them the game did not hold. */
+    earlierNote: (count: number, missing: number) =>
+      `以前のセッションの${changeCount(count)}` + (missing > 0 ? `（うち${format(missing)}件はデータ読み込み時にゲーム内にありませんでした）` : "") + "。移籍、治療、結びつき、条項、名前の変更は履歴として残り、元に戻せません。",
+    /** The small tag after the name of an earlier change, and its hover text. */
+    earlierTag: "以前",
+    earlierTitle: "アプリが最後に接続する前に書き込まれ、このキャリアの履歴に保存されています",
+    /** Under the status of an earlier change: whether the game held its value when the data was last read. */
+    inGame: "ゲーム内",
+    inGameTitle: "データを最後に読み込んだとき、ゲームはこの値を保持していました",
+    notInGame: "ゲーム内になし",
+    notInGameTitle: "データを最後に読み込んだとき、ゲームはこの値を保持していませんでした：変更後にゲームを保存しなかったか、その後ゲームが値を変えました",
+    /** In the place of Undo for an earlier change that cannot be undone from here, and its hover text. */
+    historyOnly: "履歴",
+    historyOnlyTitle: "アプリが最後に接続する前に行われた変更：元に戻すには当時のゲームのメモリが必要でした",
+    /** Under a mass edit: how many of its earlier changes the game did not hold. */
+    batchNotInGame: (count: number) => `${format(count)}件はゲーム内になし`,
+    /** Empties the list and the history of the career; the question that asks first, and its two answers. */
+    clearHistory: "履歴を消去",
+    clearHistoryTitle: "この一覧を空にし、このキャリアの履歴を消去します。変更はゲームに残ります。",
+    confirmClear: "このキャリアの履歴を消去しますか？変更はゲームに残りますが、ここからは元に戻せなくなります。",
+    keepHistory: "残す",
+    clearConfirm: "消去",
     continueHint: "変更はゲームが進行した後に表示されます：ゲームで「続ける」を押してください。",
     swappedWith: (name: string) => `${name}とトレード`,
     released: (name: string) => `${name}を契約解除`,
@@ -1316,7 +1535,7 @@ export const ja: Strings = {
       change: "変更",
       status: "状態",
     },
-    kinds: { player: "選手", staff: "スタッフ", club: "クラブ" },
+    kinds: { player: "選手", staff: "スタッフ", club: "クラブ", nationalTeam: "代表チーム" },
     stored: (change: string) => `内部値 ${change}`,
     undone: (time: string) => `${time}に元に戻しました`,
     undo: "元に戻す",
@@ -1337,6 +1556,28 @@ export const ja: Strings = {
     previous: "前へ",
     next: "次へ",
     range: (first: number, last: number, total: number) => `${format(total)}件中 ${format(first)}–${format(last)}`,
+
+    // Search and filters
+    /** The search box: what it looks through. Its name for assistive technology is the same. */
+    searchPlaceholder: "名前、UID、項目、クラブで変更を検索",
+    /** The name of the three buttons that choose which sessions' changes are listed, for assistive technology. */
+    sessionGroup: "セッション",
+    sessions: { all: "すべて", this: "このセッション", earlier: "以前のセッション" },
+    /** The check boxes: only changes still in place, and only earlier ones the game did not hold; their hover text. */
+    notUndone: "元に戻していない",
+    notUndoneTitle: "まだ有効な変更のみ",
+    notInGameFilterTitle: "データを最後に読み込んだとき、ゲームが保持していなかった以前の変更のみ",
+    /** Takes the search text and every choice away. */
+    clearFilter: "フィルターを解除",
+    /** The line beside the title while a search or a filter is on: `matching` of the `total` changes, `undone` of those undone. */
+    filteredCount: (matching: number, total: number, undone: number) => {
+      const count = `${changes(total)}のうち${format(matching)}件`;
+      return undone === 0 ? count : `${count} · ${format(undone)}件を元に戻し済み`;
+    },
+    /** Under a mass edit while a search or a filter is on: how many of its changes they leave. */
+    batchMatching: (matching: number, total: number) => `${format(total)}件中${format(matching)}件が一致`,
+    /** In the place of the list when the search and the filters leave no change. */
+    noMatches: "検索とフィルターに一致する変更はありません。",
   },
 
   export: {
@@ -1374,7 +1615,7 @@ export const ja: Strings = {
         "各スタッフの職と所属先、能力、1〜20段階の能力値、性格、評価、契約（給与と日付）と、ゲーム内の日付。金額は" +
         "ゲームと同じくポンドです。ゲーム内では何も変わりません。",
       club:
-        "各クラブの評価、創立年、シーズンチケット、SNSフォロワー、サポーターの内訳と特徴、施設、スタジアム、財務（残高、" +
+        "各クラブの国、リーグ、評価、創立年、シーズンチケット、SNSフォロワー、サポーターの内訳と特徴、施設、スタジアム、財務（残高、" +
         "移籍予算、週あたりの給与支出と給与予算、チケット価格）と、ゲーム内の日付。FM はプレー中のリーグのクラブの財務" +
         "しか保持していません。金額はゲームと同じくポンドです。ゲーム内では何も変わりません。",
     },
@@ -1389,6 +1630,24 @@ export const ja: Strings = {
     show: "フォルダで表示",
     showTitle: "ファイルをフォルダで表示します",
     close: "閉じる",
+
+    /** The export of the Changes view: a CSV file of the changes its search and filters show. */
+    changes: {
+      buttonTitle: "一覧に表示されている変更を、表計算ソフトやスクリプト向けのCSVファイルに書き出します",
+      title: "変更を書き出し",
+      /** What the export covers: everything the list's search and filters select, or, with none on, the whole history. */
+      scope: (count: number, filtering: boolean) =>
+        count === 0
+          ? "検索とフィルターに一致する変更はありません。"
+          : filtering
+            ? `${changes(count)}：検索とフィルターで選ばれたもの（新しい順）。`
+            : `${changes(count)}：このキャリアの履歴すべて（新しい順）。`,
+      contents:
+        "各変更の時刻（ローカル時刻、UTCとの差つき）、名前とUID、項目、変更前と変更後の値（ゲームが保存している形と、" +
+        "ここでの表示）、一覧がその下に示す補足、含まれていた一括編集、元に戻した時刻、以前のセッションのものか、" +
+        "ゲーム内にあるか。ゲームは何も変更されません。",
+      done: (count: number, file: string) => `${changes(count)}を ${file} に書き出しました`,
+    },
   },
 
   massEdit: {
@@ -1764,12 +2023,14 @@ export const ja: Strings = {
   release: {
     button: "契約解除",
     buttonTitle: "ゲーム内でこの選手をクラブとの契約から解除し、フリーエージェントにします",
+    staffButtonTitle: "ゲーム内でこのスタッフをクラブとの契約から解除し、所属クラブなしにします",
 
     // The dialog
     title: "契約解除",
     from: "離れるクラブ",
     checking: "契約解除を確認中…",
     ready: (club: string) => `${club} → フリーエージェント`,
+    staffReady: (club: string) => `${club} → 無職`,
     doesHeading: "契約解除で行われること",
     does: [
       "クラブのすべてのチームを離れ、契約が終了します：どのクラブとも契約できるフリーエージェントになります",
@@ -1777,6 +2038,12 @@ export const ja: Strings = {
       "クラブでのキャプテンの役割は空席になります",
       "ゲームの移籍履歴には表示されません",
       "変更履歴に記録され、1回の取り消しで同じ契約のまま選手を戻せます",
+    ],
+    staffDoes: [
+      "すぐにクラブのスタッフから外れ、契約が終了します：ゲーム自身の所属クラブのないスタッフと同じく無職になります",
+      "誰にも何も支払われません",
+      "監督やフットボールディレクターの座は空席となり、クラブが補充します",
+      "変更履歴に記録され、1回の取り消しで同じ契約のまま戻せます",
     ],
 
     // The foot
@@ -2620,6 +2887,77 @@ export const ja: Strings = {
       none: "なし",
       more: (count: number) => `ほか${format(count)}人`,
     },
+  },
+
+  /** What's new: what a version brings (see en.ts). */
+  whatsNew: {
+    title: (version: string) => `バージョン ${version} の新機能`,
+    updated: "FMLibreEditor が更新されました。",
+    version: (version: string) => `バージョン ${version}`,
+    thanks: (names: string) => `${names} の皆さん、ありがとうございます。`,
+    allChanges: "すべての変更",
+    allChangesTitle: "このバージョンの全ノートを GitHub で開く",
+    close: "OK",
+    link: "新機能",
+    command: "このバージョンの新機能",
+    versions: {
+      "0.5.3": [
+        {
+          title: "FM27 の 11 月 17 日のアップデート：",
+          text: "Windows と macOS では Game Pass 0.9.2524.0 と Steam ビルド 26620374 に対応しました。アップデートで位置が変わったクラブの財務と、チームが使う戦術を再び読み取れます。",
+        },
+        {
+          title: "代表チーム：",
+          text: "クラブ一覧の上の切り替えで、各国の男子と女子の代表チームを表示します。チームのスカッド、ユースチーム（U-21、U-20 など）とそのスカッド、それぞれの評価を確認でき、評価は編集できます。",
+        },
+        {
+          title: "リーグの賞金：",
+          text: "クラブの概要に、所属リーグが今シーズン支払う賞金を最終順位別と試合ごとに表示します。金額はシーズン終了まで、リーグの全クラブ分を変更できます。",
+        },
+        {
+          title: "修正：",
+          text: "ユース選手が 2020 年以降に生まれたセーブでも、エディターが書き込み前に行うチェックで止まらなくなりました。",
+        },
+      ],
+      "0.5.2": [
+        {
+          title: "マイクラブ：",
+          text: "アプリは指揮するクラブのページで開きます。注目すべき選手、クラブの資金、スカッドの操作を一か所にまとめました。自分のクラブがない場合は、クラブをフォローできます。",
+        },
+        {
+          title: "コマンドパレット：",
+          text: "Ctrl+K（Mac では ⌘K）で選手、スタッフ、クラブ、コマンドを探せます。ショートカットでタブ間も移動できます。",
+        },
+        {
+          title: "スカウト：",
+          text: "市場のお買い得、手放す選手に似た選手、同じポジションの No.1 との比較、画像や PDF で保存できるスカウトレポート、ピッチ上のスカッド、ユース入団。",
+        },
+        {
+          title: "選手の名前を変更：",
+          text: "名、姓、通称、フルネームを変更できます。新しい名前はゲームのセーブデータにも残ります。",
+        },
+        {
+          title: "契約とスタッフ：",
+          text: "ワンクリックで契約を5年延長でき、一括編集なら多くの選手に年数を追加できます。スタッフ個人やクラブの全スタッフを契約解除しても、元に戻すで一度に復元できます。",
+        },
+        {
+          title: "戦術を最大化：",
+          text: "クラブの「スカッド」タブで、チームの戦術理解度を最大にします。不満の理由も、ゲームと同じ表現で表示されるようになりました。",
+        },
+        {
+          title: "変更を保存：",
+          text: "各キャリアの変更は、再起動後も「変更履歴」タブに残り、検索、絞り込み、書き出しができます。",
+        },
+        {
+          title: "クラブのフィルター：",
+          text: "国、リーグ、評価で絞り込めます。一括編集と書き出しは、リストに表示されているクラブが対象です。",
+        },
+        {
+          title: "ロシア語と日本語：",
+          text: "言語が2つ増えました。11月12日の Steam アップデートも、対応済みのビルドになりました。",
+        },
+      ],
+    } as Record<string, { title: string; text: string }[]>,
   },
 
   errors,

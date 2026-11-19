@@ -27,6 +27,7 @@ mod locate;
 mod mass;
 mod medical;
 mod names;
+mod national;
 mod object_pool;
 mod own_memory;
 mod players;
@@ -41,6 +42,7 @@ mod scouting;
 mod selection;
 mod session;
 mod signing;
+mod sponsorship;
 mod squad;
 mod squad_report;
 mod stadium_name;
@@ -58,7 +60,8 @@ pub use clauses::{
     release_clause_expiry, release_clause_never_expires,
 };
 pub use clubs::{
-    ClubDetails, ClubIndex, ClubSummary, Finances, SUPPORTER_MIX, SUPPORTER_TRAITS, read_club_details, read_clubs,
+    ClubDetails, ClubIndex, ClubSummary, Finances, League, SUPPORTER_MIX, SUPPORTER_TRAITS, leagues, read_club_details,
+    read_clubs,
 };
 pub use coded::Coded;
 pub use cohesion::{COHESION_RANGE, CohesionPlan, CohesionSet};
@@ -70,7 +73,7 @@ pub use details::{
 };
 pub use diagnostics::{date_line, diagnostics_report, retirement_line, saves_loaded_line};
 pub use edit::{Change, EditError, Entity, Field, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Scale, Target, fields};
-pub use export::{ExportFormat, ExportHeader, Exported};
+pub use export::{ChangeRow, ExportFormat, ExportHeader, Exported, export_changes};
 pub use familiarity::{Familiarity, TacticsPlan, TacticsSet, TrainingHistory};
 pub use filter::{
     AttributeBound, ClubFilter, PlayerFilter, PlayerOrder, PlayerSort, StaffFilter, StaffOrder, StaffSort,
@@ -88,15 +91,17 @@ pub use locate::{
 pub use mass::{Operation, Plan, Planned, Skipped};
 pub use medical::{Ban, HealPlan, Healed, Injury, LiftPlan, Lifted};
 pub use names::{LONGEST_PERSON_NAME, NameChange, NameKind, PersonNames};
+pub use national::{NationalIndex, NationalSide, NationalTeamSummary, NationalUnavailable, OTHER_KINDS, SENIOR_KIND};
 pub use object_pool::ObjectPool;
 pub use players::{Nation, PLAYABLE_RATING, PlayerIndex, PlayerSummary, is_woman, nations, read_players};
 pub use prize_money::{
-    Competition, MOST_PRIZE, PrizeAmount, PrizeChange, PrizeEdit, PrizeError, PrizeMoney, PrizeStage,
+    Competition, CompetitionPrizes, MOST_PRIZE, PrizeAmount, PrizeChange, PrizeEdit, PrizeError, PrizeMoney,
+    PrizeReadError, PrizeStage, PrizeUnavailable, StagePrizes, competition_prizes,
 };
 pub use profile::{
-    ArrayRvas, BuildProfile, ContractLayout, GameLayout, Layout, PlayerLayout, PluginFingerprint, ProfileNotes,
-    SelectionLayout, StaffLayout, TacticLayout, TacticsLayout, built_in_profiles, layout_for, profile_for,
-    profile_text,
+    ArrayRvas, BuildProfile, ContractLayout, GameLayout, Layout, LayoutOverrides, PlayerLayout, PluginFingerprint,
+    ProfileNotes, SelectionLayout, StaffLayout, TacticLayout, TacticsLayout, built_in_profiles, layout_for, layout_of,
+    profile_for, profile_text,
 };
 pub use relations::{HOMEGROWN_RULES, Relation, RelationPlan, RelationSet, Tie, TieTarget};
 pub use retirement::{PlannedRetirement, RetirementPlan, RetirementSet};
@@ -112,6 +117,7 @@ pub use scouting::{
 };
 pub use session::{ArraySource, IGNORE_PROFILES, SaveVouched, Session, SessionError, find_game, profiles_ignored};
 pub use signing::NewContract;
+pub use sponsorship::{Sponsorship, SponsorshipReadError, SponsorshipUnavailable, kind_name as sponsorship_kind_name};
 pub use squad::{CaptainPlan, CaptainRole, CaptainSet, ClubTeam, Loan, SquadMember};
 pub use squad_report::{Departure, DepartureAction, DepartureReason, DepthLine, DepthPlayer, DepthStatus, SquadReport};
 pub use stadium_name::{StadiumName, StadiumRename};

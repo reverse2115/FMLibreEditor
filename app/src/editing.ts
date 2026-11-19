@@ -10,8 +10,10 @@ import type {
   ScoutingOverview,
   ScoutRequest,
   ClubName,
+  ClubStaffRow,
   ClubTeam,
   EditField,
+  EditEntity,
   Entity,
   FieldEdit,
   FieldValues,
@@ -26,6 +28,9 @@ import type {
   MoveTerms,
   NameKind,
   Nation,
+  NationalProfile,
+  NationalStatus,
+  NationalTeamAction,
   PersonNames,
   RoomMaker,
   StadiumName,
@@ -35,7 +40,7 @@ import type {
 } from "./types";
 
 /** The fields of players or of staff the editor can change, in display order. */
-export const editFields = (entity: Entity) => call<EditField[]>("edit_fields", { entity });
+export const editFields = (entity: EditEntity) => call<EditField[]>("edit_fields", { entity });
 
 /**
  * Brings the player `uid` back from his loan: it now ends on the game's date, its last day, and he is back at his club
@@ -104,10 +109,10 @@ export const maxStaffAttributes = (id: number) => call<MassReport>("max_staff_at
 export const listNations = () => call<Nation[]>("list_nations");
 
 /** Every editable field of one player or member of staff, as stored, read from the game now. */
-export const readValues = (entity: Entity, uid: number) => call<FieldValues>("read_values", { entity, uid });
+export const readValues = (entity: EditEntity, uid: number) => call<FieldValues>("read_values", { entity, uid });
 
 /** Writes `edits` (values as stored). Each one is checked and written on its own; refused ones change nothing. */
-export const applyEdits = (entity: Entity, uid: number, edits: FieldEdit[]) =>
+export const applyEdits = (entity: EditEntity, uid: number, edits: FieldEdit[]) =>
   call<ApplyReport>("apply_edits", { entity, uid, edits });
 
 /**
@@ -118,11 +123,17 @@ export const applyEdits = (entity: Entity, uid: number, edits: FieldEdit[]) =>
 export const extendContract = (entity: Entity, uid: number, years: number) =>
   call<LoggedChange>("extend_contract", { entity, uid, years });
 
-/** Every change written this session, newest first. */
+/** Every change written to the career the game has loaded, this connection's and the earlier ones, newest first. */
 export const changeLog = () => call<LoggedChange[]>("change_log");
 
 /** Writes back the old value of a logged change; fails if the game has changed the value since. */
 export const undoChange = (id: number) => call<LoggedChange>("undo_change", { id });
+
+/**
+ * Forgets the history of the career the game has loaded, this connection's changes with it: the list is empty
+ * afterwards, while every change stays in the game.
+ */
+export const clearHistory = () => call<void>("clear_history");
 
 /** The whole percentage the game shows (0–100) for a stored one (0–10000), for a profile that has no field table. */
 export const wholePercent = (stored: number): number => Math.floor((stored + 50) / 100);
@@ -332,6 +343,41 @@ export const moveStaff = (uid: number, club: number, job?: number, terms?: MoveT
 /** Gives the member of staff another job at his club (a contract code); logged and undone like any change. */
 export const changeStaffJob = (uid: number, job: number) => call<LoggedChange>("change_staff_job", { uid, job });
 
+/**
+ * Checks that the member of staff `uid` can be released from his club, and names it. Nothing is written; when he
+ * cannot be released, the error says why (the human manager, the board, a player-coach, ...).
+ */
+export const planStaffRelease = (uid: number) => call<ClubName>("plan_staff_release", { uid });
+
+/**
+ * Releases the member of staff from his club at once: no club and no contract, as the game's own staff without a club.
+ * Logged as a change of his `club` to 0, which one undo takes back.
+ */
+export const releaseStaff = (uid: number) => call<LoggedChange>("release_staff", { uid });
+
+/** The staff of the club `club`, each with why Release all staff would leave them there (none for one it releases). */
+export const clubStaff = (club: number) => call<ClubStaffRow[]>("club_staff", { club });
+
+/**
+ * Releases every member of staff of the club that can be released (not the human manager or the board), logged as one
+ * batch, undone with `undoBatch`; `applied` counts them, `failed` the releases the game refused.
+ */
+export const releaseClubStaff = (club: number) => call<MassReport>("release_club_staff", { club });
+
+/**
+ * The staff of the club `club` as moving all of them to the club `to` would leave them, each with why they would stay
+ * (none for one who moves): you, the board, a director of football or a manager whose place at `to` is taken, ...
+ * Nothing is written; refused as a whole for the same club, or a men's and a women's club.
+ */
+export const planClubStaffMove = (club: number, to: number) =>
+  call<ClubStaffRow[]>("plan_club_staff_move", { club, to });
+
+/**
+ * Moves every member of staff of the club that can be moved to the club `to`, each in their own job and on their
+ * contract, logged as one batch, undone with `undoBatch`; `applied` counts them, `failed` the moves the game refused.
+ */
+export const moveClubStaff = (club: number, to: number) => call<MassReport>("move_club_staff", { club, to });
+
 /** The jobs `changeStaffJob` gives, and a move or signing of staff can, by contract code. */
 export const staffJobs = () => call<number[]>("staff_jobs");
 
@@ -381,6 +427,16 @@ export const keepPlaying = (uid: number) => call<LoggedChange>("keep_playing", {
 /** The teams of a club, the senior team first, with their players and the live values a squad screen shows. */
 export const clubSquads = (uid: number) => call<ClubTeam[]>("club_squads", { uid });
 
+/** Whether this build of the game has national teams to show, and if not, why. */
+export const nationalStatus = () => call<NationalStatus>("national_status");
+
+/**
+ * The national team `uid` as its profile shows it, read now: its list row, its teams, and its team of kind `kind` with
+ * the players (its senior team when `kind` is null, or when it has no team of that kind).
+ */
+export const nationalProfile = (uid: number, kind: number | null) =>
+  call<NationalProfile>("national_squad", { uid, kind });
+
 /**
  * Makes the player `uid` the captain or vice-captain of the club's team `team` (see `ClubTeam.index`); he must play
  * for that team. When he held the other role, the two captains swap. Logged with `captaincy` and undone as one change.
@@ -395,6 +451,10 @@ export const setCaptain = (club: number, team: number, role: CaptainRole, uid: n
  */
 export const teamAction = (club: number, team: number, action: TeamAction) =>
   call<MassReport>("team_action", { club, team, action });
+
+/** Heal all, Inspire all or Refresh all for the players the senior team of the national team `uid` lists. */
+export const nationalTeamAction = (uid: number, action: NationalTeamAction) =>
+  call<MassReport>("national_team_action", { uid, action });
 
 /** The human manager's club, its money, its squad line by line and the players to let go; fast. */
 export const scoutingOverview = () => call<ScoutingOverview>("scouting_overview");

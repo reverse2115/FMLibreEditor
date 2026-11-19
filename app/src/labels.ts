@@ -6,14 +6,14 @@
 // `fieldLabel` for the names of the fields), the Changes view `changesText`, mass editing `massEditText`, comparing
 // players `comparisonText`, moving a player to another club (or swapping him with one) `moveText`, releasing him
 // `releaseText`, changing his names `renameText`, his nationalities and homegrown status `tieText`, a club's squad `squadText`, the sidebar and the connect panel `appText`, the status of the
-// graphics packs `graphicsText`, and new versions of the app `updateText`.
+// graphics packs `graphicsText`, new versions of the app `updateText`, and what one brings `whatsNewText`.
 // A new language only has to provide a dictionary of the same shape (and be added to i18n/index.ts, with a flag in
 // SettingsMenu.tsx).
 
 import { formatNumber } from "./format";
 import { intlLocale, strings } from "./i18n";
 import type { Strings } from "./i18n/en";
-import type { CaptainRole, City, Entity, Nation } from "./types";
+import type { CaptainRole, City, EditEntity, Nation } from "./types";
 
 export const ATTRIBUTE_LABELS = strings.attributes;
 
@@ -125,8 +125,18 @@ export const staffListText = strings.staffList;
 /** The club profile: what the player and staff panels do not have. */
 export const clubProfileText = strings.clubProfile;
 
+/** A club's staff: the tab of its profile, and Release all staff with its dialog. */
+export const clubStaffText = strings.clubStaff;
+
 /** The club list, with the sidebar entry and the status-line count that go with it. */
 export const clubListText = strings.clubList;
+
+/** A club's league prize money, in its finances: what the league pays this season, and changing it. */
+export const leaguePrizesText = strings.leaguePrizes;
+/** A club's sponsorship deals, in its finances: each deal by its kind, what it pays and its term. */
+export const sponsorshipsText = strings.sponsorships;
+/** The Clubs tab's national teams: the list, the profile of a national team and why there may be none. */
+export const nationalText = strings.national;
 
 /**
  * The app around the lists: the sidebar (and the note at its foot, which depends on the connection, see
@@ -167,7 +177,10 @@ export const comparisonText = strings.comparison;
 /** Moving a player to another club, or swapping him with one: the button in his profile and the dialog it opens. */
 export const moveText = strings.move;
 
-/** Releasing a player from his club: the button beside Transfer in his profile and the dialog it opens. */
+/**
+ * Releasing a player or a member of staff from their club: the button beside Transfer in the profile and the dialog it
+ * opens.
+ */
 export const releaseText = strings.release;
 
 /** Changing a player's names: the button beside Release in his profile and the dialog it opens. */
@@ -184,6 +197,14 @@ export const tieText = strings.ties;
 
 /** A contract's bonuses and clauses: the button under them in the profile and its dialog. */
 export const clauseText = strings.clauses;
+
+/**
+ * The name of one of a nation's teams by the game's code for its kind ("Under 21"), as the game's national team screens
+ * name it; a kind the editor has no name for is named by its code ("Type 33").
+ */
+export function nationalTeamLabel(kind: number): string {
+  return nationalText.teamKinds[kind] ?? nationalText.teamType(kind);
+}
 
 /** A club's squad: the tab of its profile with its teams' players, the actions on a team and the captains. */
 export const squadText = strings.squad;
@@ -244,7 +265,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = strings.fields;
  * The name of an editable field, from the key `edit_fields` gives it ("current_ability", "attribute.finishing",
  * "position.st", "contract.wage", "finance.balance", …). A key it does not know is returned as it is.
  */
-export function fieldLabel(entity: Entity, key: string): string {
+export function fieldLabel(entity: EditEntity, key: string): string {
   const fixed = labelIn(FIELD_LABELS, key);
   if (fixed !== undefined) {
     return fixed;
@@ -261,6 +282,18 @@ export function fieldLabel(entity: Entity, key: string): string {
       const position = labelIn(POSITION_LABELS, name);
       return position === undefined ? key : editText.positionRating(position);
     }
+    case "prize": {
+      // A final position's amount: `prize.place.3`; the amounts per match have labels of their own.
+      const place = Number(key.split(".")[2]);
+      return name === "place" && Number.isInteger(place) ? strings.leaguePrizes.placeField(place) : key;
+    }
+    case "team": {
+      // A national team's other teams: "team.10.reputation" is the reputation of its under-21s.
+      const kind = Number(name);
+      return entity === "nationalTeam" && Number.isInteger(kind) && key.endsWith(".reputation")
+        ? nationalText.teamReputation(nationalTeamLabel(kind))
+        : key;
+    }
     default:
       return key;
   }
@@ -273,3 +306,6 @@ export const homeText = strings.home;
 
 /** The command palette and the keyboard shortcuts (see `CommandPalette` and `shortcuts.ts`). */
 export const paletteText = strings.palette;
+
+/** What a version brings, told once after an update (see `WhatsNewDialog`). */
+export const whatsNewText = strings.whatsNew;
